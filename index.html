@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FANG-333 订单选物流规则 · v2.10 交互原型</title>
+<title>订单选物流规则 · v2.11 交互原型</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:13px;color:#303133;background:#f0f2f5;height:100vh;overflow:hidden}
@@ -439,6 +439,24 @@ function restoreFallback(factory,group) {
   UNDO=null; $('#undo').classList.remove('show');
   render(); toast('已恢复为工厂当前顺序');
 }
+// 商家原快递管理中的跨境行独立保存，国内恢复顺序只处理 customerFallback。
+const legacyChannelOrders=Object.fromEntries(FACTORIES.map(f=>[f,{sort:1,custom:false}]));
+function legacyChannelEditor(factory=S.fbFac){
+  if(S.role!=='shop'||!Object.hasOwn(legacyChannelOrders,factory))return;
+  const record=legacyChannelOrders[factory], writable=allowCustom({cust:ME,fac:factory});
+  openModal(`<div class="mh">快递管理 · 跨境渠道分配顺序<span class="x" onclick="closeModal()">×</span></div><div class="mb">
+    <label>合作工厂　<select class="sel" id="legacyCrossFactory" onchange="legacyChannelEditor(this.value)">${FACTORIES.map(f=>`<option ${f===factory?'selected':''}>${esc(f)}</option>`).join('')}</select></label>
+    <table class="mt12"><thead><tr><th>原渠道</th><th>关联平台</th><th>分配顺序</th><th>排序来源</th></tr></thead><tbody>
+      <tr><td>示例跨境渠道 X</td><td>TikTok</td><td><input class="inp" style="width:80px" type="number" step="1" id="legacyCrossSort" value="${record.sort}" ${writable?'':'disabled'}></td><td>${record.custom?'商家已自定义':'工厂原顺序'}</td></tr></tbody></table>
+    <p>${writable?'本厂允许商家维护渠道原排序。':'本厂未开放商家排序权限，当前只读。'} 国内恢复工厂顺序后，这条渠道仍沿用本页保存的值。</p></div>
+    <div class="mf"><button class="btn" onclick="oldGuide('shopExpress')">返回快递管理</button>${writable?'<button class="btn p" id="saveLegacyCrossSort">保存渠道排序</button>':''}</div>`);
+  if(writable)$('#saveLegacyCrossSort').onclick=()=>{
+    if(S.role!=='shop'||!allowCustom({cust:ME,fac:factory}))return;
+    const sort=Number($('#legacyCrossSort').value);
+    if(!$('#legacyCrossSort').value||!Number.isSafeInteger(sort)){toast('请输入有效的排序值');return}
+    record.sort=sort;record.custom=true;legacyChannelEditor(factory);toast('已保存本厂渠道排序');
+  };
+}
 // 共享范围是商家及订单平台。示例商家甲沿用默认开启，乙显式关闭。
 const SUPER_SETTINGS={'示例商家乙':false};
 const SUPER_SHARES=[
@@ -810,8 +828,9 @@ function tiktokLabelExample(kind='current'){
     ${historic&&!sample.verified?`<label class="small"><input type="checkbox" id="tkLabelMatched" ${sample.matched?'checked':''} onchange="tiktokLabelCases.history.matched=this.checked;tiktokLabelExample('history')"> 提供示例平台凭据：店铺甲、订单行 L1 和包裹 P 均吻合</label><br>`:''}
     <label class="small"><input type="checkbox" id="tkLabelAuth" ${sample.authorized?'checked':''} onchange="tiktokLabelCases['${kind}'].authorized=this.checked;tiktokLabelExample('${kind}')"> 原店铺授权当前有效（模拟）</label>
     <div class="bar mt12">${historic&&!sample.verified?`<button id="tkLabelVerify" class="btn" ${sample.authorized&&sample.matched?'':'disabled'}>登记原包核对结果</button>`:''}
-    <button id="tkLabelRetry" class="btn p" ${canRetrieve?'':'disabled'}>重取原面单</button></div>
-    <p class="small" id="tkLabelCounts">${historic?'本次接手续办新增请求：建包 0 次，取面单 '+(sample.ready?1:0)+' 次':'本单累计请求：建包 1 次，取面单 '+(sample.ready?2:1)+' 次（均针对 P）'}，交寄 0 次。</p>
+    <button id="tkLabelRetry" class="btn p" ${canRetrieve?'':'disabled'}>重取原面单</button>
+    ${sample.ready?`<button class="btn" id="tkShowHandover" onclick="tkHandoverExample('${kind}')">查看打印与实际发货</button>`:''}</div>
+    <p class="small" id="tkLabelCounts">${historic?'本次接手续办新增请求：建包 0 次，取面单 '+(sample.ready?1:0)+' 次':'本单累计请求：建包 1 次，取面单 '+(sample.ready?2:1)+' 次（均针对 P）'}，交寄 ${sample.handover?.attempts.length||0} 次。</p>
     ${sample.reviewedAt?`<p class="small">核对记录 · ${esc(sample.reviewedAt)} · 示例工厂员工依据平台包裹凭据关联 P 与 L1。</p>`:''}
     ${sample.retrievedAt?`<p class="small">取单记录 · ${esc(sample.retrievedAt)} · 示例工厂员工 · 已取得包裹 P 的 A6 面单。</p>`:''}
     <details class="mt12"><summary>旧弹窗重开后会怎样？</summary><p>在订单仍符合预约条件时，旧弹窗无法从失败备注接续 P。若模板重量、尺寸齐全且报价成功，系统会预选当前最低费用服务，其结果可能与 S 不同。员工再次提交会发出新建包请求，平台是否返回原 P 或再次收费需看外部回执。</p></details>
@@ -825,6 +844,74 @@ function tiktokLabelExample(kind='current'){
     if(!sample.authorized||!sample.verified||sample.ready)return;
     sample.ready=true;sample.retrievedAt=nowStr();tiktokLabelExample(kind);
   };
+}
+const tkDispatchConditions = {
+  pickup: {label:'上门取件 · 时段有效', method:'上门取件'},
+  dropoff: {label:'自寄 · 承运商与运单号有效', method:'自寄'},
+  syncOff: {label:'本次扫描不同步平台', issue:'本次未向平台提交。配置更改不会自动补发。'},
+  empty: {label:'平台明细尚无包号', issue:'请刷新平台明细，核对原店铺、订单行和 P。'},
+  conflict: {label:'平台明细中的包号与 P 不符', issue:'请核对原包归属，保留 P 和 A6。'},
+  noCarrier: {label:'自寄 · 缺有效平台承运商', issue:'请补齐有效的平台承运商编码。'},
+  noTracking: {label:'订单或物流记录缺有效运单号', issue:'请核对订单条码与原包物流记录，补齐有效运单号。'},
+  noSlot: {label:'上门取件 · 无有效时段', issue:'请重新核对可用取件时段。'}
+};
+const tkDispatchStatus = {accepted:'原包 P 交寄已受理', rejected:'平台明确拒绝', unknown:'交寄结果待核'};
+function tkHandoverExample(kind){
+  const sample=tiktokLabelCases[kind];
+  if(S.role!=='factory'||!sample?.ready)return;
+  const hand=sample.handover??={condition:'pickup', reply:'accepted', attempts:[], scans:[], localAt:'', orderAt:'', printCount:0, notice:'', corrected:false};
+  const last=hand.attempts.at(-1), state=last?.result;
+  const locked=state==='accepted'||state==='unknown';
+  const caseOptions=Object.entries(tkDispatchConditions).map(([id,entry])=>`<option value="${id}" ${hand.condition===id?'selected':''}>${entry.label}</option>`).join('');
+  const outcomes=Object.entries(tkDispatchStatus).map(([id,label])=>`<option value="${id}" ${hand.reply===id?'selected':''}>${label}</option>`).join('');
+  const records=hand.attempts.map((r,i)=>`<li>第 ${i+1} 次 · ${r.at} · 示例工厂员工 · 店铺甲 / L1 / P · ${r.method} · ${tkDispatchStatus[r.original]}${r.resolvedAt?' → '+r.resolvedAt+' 核实原包回执：'+tkDispatchStatus[r.result]:''}${r.result==='rejected'?'（示例原因：平台拒绝本次交接安排）':''}</li>`).join('');
+  openModal(`<div class="mh">TikTok 美国本土合作物流 · 实际发货示例<span class="x" onclick="closeModal()">×</span></div><div class="mb">
+    <p>店铺甲 · 原订单行 L1 · 原包裹 P · A6 已取得。以下模拟工厂的打印和扫描发货，所有回执均为示例。</p>
+    <div class="kv"><span class="k">面单</span><span>原 P 的 A6 已取得，已模拟打印 ${hand.printCount} 次</span>
+    <span class="k">ERP 本地发货</span><span id="tkLocalResult">${hand.localAt?'已记录实际发货扫描 · '+hand.localAt:'尚未扫描发货'}</span>
+    <span class="k">P 的交寄结果</span><b id="tkDispatchResult">${state?tkDispatchStatus[state]:'尚未向平台提交'}</b>
+    <span class="k">平台订单状态</span><span id="tkOrderResult">${hand.orderAt?'待取件 · 订单级回捞 '+hand.orderAt:'尚未回捞'}</span></div>
+    <div class="bar mt12"><button class="btn s" id="tkPrintA6">打印原 A6（模拟）</button>
+    <button class="btn s" id="tkPollOrder" ${sample.authorized?'':'disabled'}>回捞订单状态（模拟）</button></div>
+    <div class="bar mt12"><label>扫描时条件 <select id="tkDispatchCondition" class="sel" ${locked?'disabled':''}>${caseOptions}</select></label>
+    <label>本次请求回执 <select id="tkDispatchReply" class="sel" ${locked?'disabled':''}>${outcomes}</select></label></div>
+    ${state==='rejected'?`<label class="small"><input id="tkCorrected" type="checkbox" ${hand.corrected?'checked':''}> 已处理平台拒绝原因并复核本次交接资料（模拟）</label>`:''}
+    <div class="bar mt12"><button class="btn p" id="tkScanDispatch" ${locked||(state==='rejected'&&!hand.corrected)?'disabled':''}>${state==='rejected'?'确认重试原包交寄':'扫描发货（模拟）'}</button>
+    ${state==='unknown'?`<button class="btn" id="tkReceiptAccepted" ${sample.authorized?'':'disabled'}>核对到 P 的受理回执</button><button class="btn" id="tkReceiptRejected" ${sample.authorized?'':'disabled'}>核对到 P 的拒绝回执</button>`:''}</div>
+    <p class="small" id="tkDispatchNotice">${esc(hand.notice)}</p>
+    <p class="small" id="tkDispatchCount">取得 A6 后，新增建包 0 次，新增取面单 0 次，交寄 ${hand.attempts.length} 次。</p>
+    ${records?`<details><summary>原包交寄记录（${hand.attempts.length} 笔）</summary><ol>${records}</ol></details>`:''}
+    ${hand.scans.length?`<details><summary>实际发货扫描记录（${hand.scans.length} 笔）</summary><ol>${hand.scans.map(s=>'<li>'+esc(s)+'</li>').join('')}</ol></details>`:''}
+    <details><summary>现有入口与证据</summary><p>工厂打印读取 A6 文件。扫描发货按配置决定是否同步。旧路径取平台缓存的包号，缺包时可能再次建包。此示例演示本期处理。订单级「待取件」可在订单列表查看，不能确认其他包裹的交寄或实物揽收。「上传运单号」适用于商家自发货。</p></details>
+    </div><div class="mf"><button class="btn" id="tkBackLabel" onclick="tiktokLabelExample('${kind}')">返回原包面单</button><button class="btn" onclick="closeModal()">关闭</button></div>`);
+  const show=()=>tkHandoverExample(kind);
+  $('#tkPrintA6').onclick=()=>{hand.printCount++;hand.notice='已读取原 A6 文件，本次打印未提交交寄。';show();};
+  $('#tkPollOrder').onclick=()=>{if(!sample.authorized)return;hand.orderAt=nowStr();hand.notice='平台订单已回捞为待取件。P 的交寄请求仍按包裹回执判断。';show();};
+  $('#tkDispatchCondition').onchange=e=>{hand.condition=e.target.value;hand.corrected=false;hand.notice='';show();};
+  $('#tkDispatchReply').onchange=e=>{hand.reply=e.target.value;};
+  if($('#tkCorrected'))$('#tkCorrected').onchange=e=>{hand.corrected=e.target.checked;show();};
+  $('#tkScanDispatch').onclick=()=>{
+    if(locked||(state==='rejected'&&!hand.corrected))return;
+    const at=nowStr(), condition=tkDispatchConditions[hand.condition];
+    hand.localAt=at;
+    if(hand.condition==='syncOff')hand.notice=condition.issue;
+    else if(!sample.authorized)hand.notice='请恢复原店铺甲的有效授权，再核对原包。';
+    else if(condition.issue)hand.notice=condition.issue;
+    else{
+      hand.attempts.push({at,method:condition.method,original:hand.reply,result:hand.reply});
+      hand.corrected=false;
+      hand.notice={accepted:'已取得 P 的明确受理回执。',rejected:'请处理拒绝原因并复核交接资料后重试。',unknown:'请求已发出，等待 P 的明确受理或拒绝凭据，重复扫描暂停。'}[hand.reply];
+    }
+    hand.scans.push(at+' · 示例工厂员工 · L1 / P · '+condition.label+' · '+hand.notice);
+    show();
+  };
+  function reconcile(result){
+    if(last?.result!=='unknown'||!sample.authorized)return;
+    last.result=result;last.resolvedAt=nowStr();
+    hand.notice='已核对原包 P 的平台回执，本次核对新增交寄 0 次。';show();
+  }
+  if($('#tkReceiptAccepted'))$('#tkReceiptAccepted').onclick=()=>reconcile('accepted');
+  if($('#tkReceiptRejected'))$('#tkReceiptRejected').onclick=()=>reconcile('rejected');
 }
 function crossLog(scene,headStep='rule'){
   const sub=S.tailSub;
@@ -856,7 +943,7 @@ function toolbar(scene){
 }
 function migrateBanner(){
   if(S['mig_'+S.role]) return '';
-  return `<div class="alert a-b">请核对本租户${S.role==='shop'?'的地区、头程及四种尾程配置':'的网点、头程、速卖通渠道及尾程账号配置'}。<a onclick="migReport()">查看迁移报告</a><span class="sp" style="flex:1"></span><a onclick="S['mig_'+S.role]=1;render();toast('已收起提醒，可从工具栏「迁移报告」再次查看')">我已核对，不再提示</a></div>`;
+  return `<div class="alert a-b">请核对本租户${S.role==='shop'?'的国内兜底候选、地区规则、头程及四种尾程配置':'的网点、头程、速卖通渠道及尾程账号配置'}。<a onclick="migReport()">查看迁移报告</a><span class="sp" style="flex:1"></span><a onclick="S['mig_'+S.role]=1;render();toast('已收起提醒，可从工具栏「迁移报告」再次查看')">我已核对，不再提示</a></div>`;
 }
 function tailRulesPage(){
   const mode=S.tailSub;
@@ -894,7 +981,7 @@ function fallbackView(role){
     :`<div class="bar"><span>工厂：</span><select class="sel" onchange="S.fbFac=this.value;render()">${FACTORIES.map(f=>`<option ${fac===f?'selected':''}>${f}</option>`).join('')}</select>
     ${allow?`<span class="tag t-g">工厂允许自定义顺序</span><span class="small muted">当前使用：${custom?'<b>你的自定义顺序</b>':'工厂顺序（未修改）'}</span>${custom?`<button class="btn s" onclick="restoreFallback('${fac}','${S.fbPf}')">恢复工厂顺序</button>`:''}`:'<span class="tag t-i">工厂不允许自定义顺序</span><span class="small muted">当前使用：工厂顺序（只读）</span>'}</div>`;
   const pfSeg=`<div class="seg">${PF_GROUPS.map(g=>`<span class="${S.fbPf===g?'on':''}" onclick="S.fbPf='${g}';render()">${g}</span>`).join('')}</div>`;
-  return head+pfSeg+`<div class="alert a-i">按平台分组维护快递公司顺序。规则均未命中时，跳过未开通、被禁用或受地区管控的快递，取组内首个可用的快递公司。首次预约普通面单时，工厂另按这笔订单适用的取号平台查找网点。${role==='shop'?'原“快递管理”页的“分配顺序”已迁到这里。':''}</div>
+  return head+pfSeg+`<div class="alert a-i">仅维护当前平台分组的国内快递。规则未命中时，跳过已禁用、未开通或受地区管控的快递。首次预约时，工厂再按适用的面单平台选择网点。${role==='shop'?` 恢复顺序只影响本组国内快递。 <button class="btn s" onclick="legacyChannelEditor()">原快递管理 · 跨境渠道排序</button> <button class="btn s" onclick="domesticMigrationReview()">核对历史平台映射</button>`:''}</div>
     <table style="max-width:720px"><thead><tr><th style="width:50px">排序</th><th>顺序</th><th>快递公司</th><th>平台</th><th>状态</th></tr></thead><tbody>
     ${list.map((x,i)=>`<tr draggable="${editable}" data-fb="${i}" data-fac="${fac}" data-pf="${S.fbPf}"><td>${editable?'<span class="handle">⋮⋮</span>':''}</td><td>${i+1}</td><td>${x.cp}${(DISABLED[fac]||[]).includes(x.cp)&&role==='shop'?' <span class="tag t-r">你已禁用</span>':''}</td><td class="muted">${S.fbPf}</td><td><span class="sw ${x.on?'on':''} ${editable?'':'ro'}" onclick="${editable?`updateFallback('${fac}','${S.fbPf}',items=>items[${i}].on^=1)`:"toast('工厂不允许商家修改')"}"></span></td></tr>`).join('')}
     ${list.length?'':'<tr><td colspan="5"><div class="empty">该平台没有可用快递，这类订单规则未命中时将“未匹配物流”</div></td></tr>'}</tbody></table>`;
@@ -1153,6 +1240,7 @@ function y2FactoryTransfer(sample='accepted', stage='original', feedback='') {
     controls+=action('取消推送',allowed?'withdrawn':stage,remark);
   }
   if(stage==='changed') controls+=action('推送给乙厂','pushed','已推送给乙厂。');
+  if(stage==='pushed' && hasHead) controls+='<button class="btn s" onclick="y2OpenLabelHandoff()">查看换厂面单交接</button>';
   if(stage==='pushed') controls+=action('核对头程申请资格',stage,hasHead?'原头程已创建，本次新增头程申请 0 次。面单是否可用还要核对原包裹和使用权。':'没有原头程申请，按当前包裹资料、授权和渠道重新预选。');
   openModal(`<div class="mh">Temu 美国 Y2 · 商家换厂示例<span class="x" onclick="closeModal()">×</span></div><div class="mb">
     <p>甲、乙两厂均与商家合作。切换起始条件可重新演示，每次操作只作用于这张示例订单。</p>
@@ -1164,6 +1252,124 @@ function y2FactoryTransfer(sample='accepted', stage='original', feedback='') {
     ${original && sample==='audited'?'<p class="small muted">本例单独检验条码审核条件；即使订单仍显示工厂待审，已审核条码也会拦截撤推。</p>':''}
     ${hasHead && !original?'<p class="small muted">撤回工厂推送保留原货代单。换厂和重新推送均不会自动取消头程、重新取号或标发。</p>':''}
     </div><div class="mf"><button class="btn" onclick="tailLog('a')">返回包裹结果</button><button class="btn" onclick="closeModal()">关闭</button></div>`);
+}
+const y2LabelCases = {
+  stored: {title:'甲已取得原文件', oldFile:true},
+  number: {title:'只有原六脉单号 W', oldFile:false}
+};
+for (const record of Object.values(y2LabelCases)) {
+  Object.assign(record,{grant:'old', assigned:false, delivered:false, requests:[], history:[]});
+}
+const y2LabelView = {sample:'stored',actor:'shop'};
+const y2LabelActors = {shop:'商家',old:'甲厂',next:'乙厂'};
+const y2LabelGrants = {old:'甲可在本包交付，乙仅可接收打印',next:'乙获原单取件与打印授权，甲权限已结束',none:'甲合作或授权已失效，乙无有效授权'};
+const y2LabelStatuses = {idle:'尚未发起取件',pending:'已发出，等待取件回执',unknown:'取件结果未知，核对同次请求',failed:'取件明确失败',received:'原单文件已返回'};
+function y2OpenLabelHandoff(){
+  y2LabelView.actor = S.role==='shop'?'shop':'next';
+  y2ShowLabelHandoff();
+}
+function y2LabelLog(record, actor, message){
+  record.history.unshift({tt:message,td:new Date().toLocaleTimeString('zh-CN')+' · '+actor+' · 本包头程'});
+}
+function y2LabelCanHandle(record,actor){
+  return (actor==='old' && record.grant==='old' && record.assigned) || (actor==='next' && record.grant==='next');
+}
+function y2LabelAction(action){
+  const {sample,actor}=y2LabelView;
+  const record=y2LabelCases[sample];
+  const allowed=y2LabelCanHandle(record,actor);
+  const latest=record.requests.at(-1);
+  const hasFile=record.oldFile && actor==='old' || latest?.status==='received' && !latest.conflict;
+  if(action==='assign' && actor==='shop' && record.grant==='old' && !record.assigned && !record.delivered){
+    record.assigned=true;
+    y2LabelLog(record,'商家','交甲核对本包，乙可接收本单文件');
+  }
+  if(action==='request' && allowed && !hasFile && !record.delivered && (!latest || latest.status==='failed' && !latest.conflict)){
+    const request={id:record.requests.length+1,actor:y2LabelActors[actor],status:'pending',receipts:[],conflict:false};
+    record.requests.push(request);
+    y2LabelLog(record,request.actor,'当前原单取件授权有效，已按 W 请求头程面单 · 第 '+request.id+' 次');
+  }
+  if(action==='deliver' && allowed && hasFile && !record.delivered){
+    const source=latest?.status==='received' && !latest.conflict?'按 W 第 '+latest.id+' 次取回的头程文件':'甲留存的原头程文件';
+    record.delivered=true;
+    y2LabelLog(record,y2LabelActors[actor],'已复核交付与接收权限，'+source+'已交付乙厂，仅供本包打印');
+  }
+  if(action==='print' && actor==='next' && record.delivered && record.grant!=='none'){
+    y2LabelLog(record,'乙厂','按当前打印权限使用本包已交付文件');
+  }
+  y2ShowLabelHandoff();
+}
+function y2LabelReceipt(sample,id,outcome){
+  const record=y2LabelCases[sample];
+  const request=record?.requests.find(item=>item.id===id);
+  if(!request || !['received','unknown','failed'].includes(outcome)) return;
+  const terminal=['received','failed'].includes(request.status);
+  const duplicate=request.receipts.some(receipt=>receipt.outcome===outcome);
+  let note=y2LabelStatuses[outcome];
+  if(duplicate) note='重复回执，沿用已有记录 · '+note;
+  else if(terminal){
+    if(outcome==='unknown') note='迟到的未定回执，保留原结果';
+    else {request.conflict=true;note='回执相互矛盾，待核对 · '+note;}
+  }else request.status=outcome;
+  request.receipts.push({outcome,at:new Date().toISOString()});
+  y2LabelLog(record,'六脉示例回执','对应第 '+id+' 次请求（'+request.actor+'） · '+note);
+  y2ShowLabelHandoff();
+}
+function y2LabelSetGrant(grant){
+  const record=y2LabelCases[y2LabelView.sample];
+  if(!Object.hasOwn(y2LabelGrants,grant) || record.grant===grant) return;
+  record.grant=grant;
+  record.assigned=false;
+  y2LabelLog(record,'示例授权变更',y2LabelGrants[grant]+'。已发请求仍归原记录');
+  y2ShowLabelHandoff();
+}
+function y2ShowLabelHandoff(){
+  const {sample,actor}=y2LabelView;
+  const record=y2LabelCases[sample];
+  const allowed=y2LabelCanHandle(record,actor);
+  const visible=actor!=='old' || allowed;
+  const printable=record.delivered && record.grant!=='none';
+  const latest=record.requests.at(-1);
+  const status=latest?.status || 'idle';
+  const waiting=['pending','unknown'].includes(status);
+  const hasFile=record.oldFile && actor==='old' || status==='received' && !latest?.conflict;
+  const options=(map,selected)=>Object.entries(map).map(([key,label])=>`<option value="${key}" ${key===selected?'selected':''}>${esc(label)}</option>`).join('');
+  const button=(label,action)=>`<button class="btn s" onclick="y2LabelAction('${action}')">${label}</button>`;
+  let next='商家协调有效的原单授权';
+  if(record.grant==='old') next=record.assigned?'甲从本包交接记录办理，乙查看进度':'商家转交甲核对本包，乙查看进度';
+  if(record.grant==='next') next='乙按本原单授权办理';
+  if(waiting) next=(record.grant==='none'?'商家协调有效授权':record.grant==='old'?'商家协调甲核对':'乙核对')+'，保留原请求并等待或核对同次取件回执';
+  if(latest?.conflict) next='有权方核对本次相互矛盾的回执';
+  if(record.delivered) next=printable?'乙使用本包已交付文件打印':'商家协调本包打印权限';
+  let actions='';
+  if(actor==='shop' && record.grant==='old' && !record.assigned && !record.delivered) actions+=button('转交甲核对本包','assign');
+  if(allowed && !record.delivered && !waiting){
+    if(hasFile) actions+=button('确认交付文件给乙','deliver');
+    else if(!latest || status==='failed' && !latest.conflict) actions+=button(latest?'重新按 W 取文件':'按 W 取头程文件','request');
+  }
+  if(actor==='next' && printable) actions+=button('打印本包头程面单','print');
+  const sampleOptions=Object.fromEntries(Object.entries(y2LabelCases).map(([key,value])=>[key,value.title]));
+  const controls=`<div class="bar"><label>对照样本 <select class="sel" onchange="y2LabelView.sample=this.value;y2ShowLabelHandoff()">${options(sampleOptions,sample)}</select></label>
+    <label>模拟身份 <select class="sel" onchange="y2LabelView.actor=this.value;y2ShowLabelHandoff()">${options(y2LabelActors,actor)}</select></label>
+    <label>模拟授权条件 <select class="sel" onchange="y2LabelSetGrant(this.value)">${options(y2LabelGrants,record.grant)}</select></label></div>`;
+  const receipt=actor==='old'?'':record.requests.slice().reverse().map(request=>{
+    const current=request===latest;
+    const invoke=outcome=>`y2LabelReceipt('${sample}',${request.id},'${outcome}')`;
+    return `<details class="mt12"><summary>${current?'模拟本次取件回执':'模拟第 '+request.id+' 次取件的迟到或重复回执'}</summary>
+      <div class="bar"><span>第 ${request.id} 次 · ${request.actor} · ${y2LabelStatuses[request.status]}${request.conflict?' · 回执矛盾待核':''}</span>
+      <button class="btn s" onclick="${invoke('received')}">原请求返回文件</button><button class="btn s" onclick="${invoke('failed')}">原请求明确失败</button>
+      ${['pending','unknown'].includes(request.status)?`<button class="btn s" onclick="${invoke('unknown')}">回执未知</button>`:''}</div></details>`;
+  }).join('');
+  const content=visible?`<div class="kv mt12"><span class="k">包裹头程</span><span>示例包裹 A · 六脉已受理 · 原单 W（LM-DEMO-A）</span>
+    <span class="k">原文件</span><span>${record.oldFile?'原文件归甲厂，撤推时未复制':'换厂时只有单号 W'}</span>
+    <span class="k">本次取件</span><span>${latest?`第 ${latest.id} 次 · `:''}${y2LabelStatuses[status]}${latest?.conflict?' · 回执矛盾待核':''}</span>
+    <span class="k">乙厂打印</span><span>${printable?'本包文件已交付，可打印':record.delivered?'文件已交付，当前打印权失效':'未获可打印文件'}</span>
+    <span class="k">下一步</span><span>${next}</span></div>
+    <div class="bar mt12">${actions}</div><p class="small">换厂后按原单取文件 ${record.requests.length} 次 · 新增头程下单 0 次 · 取消 0 次 · 平台标发 0 次</p>
+    ${receipt}<h4 class="mt12">包裹交接记录</h4>${traceHtml(record.history.length?record.history:[{tt:'乙厂已接单，原头程受理结果保留',td:'原文件和可打印副本分别核对'}])}`:
+    '<p role="status" class="alert mt12">甲厂当前没有受托处理该包裹的有效权限。</p>';
+  openModal(`<div class="mh">Temu 美国 Y2 · 换厂面单交接<span class="x" onclick="closeModal()">×</span></div><div class="mb">${controls}${content}</div>
+    <div class="mf">${actor!=='old'?`<button class="btn" onclick="tailLog('a')">返回包裹结果</button>`:''}<button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
 }
 function tailLog(panel = '') {
   if (panel === 'y1') {
@@ -1186,7 +1392,8 @@ function tailLog(panel = '') {
   if (panel === 'a') {
     detail = `<div class="kv mt12"><span class="k">包裹 A · 头程</span><span>六脉已受理，原六脉单号 LM-DEMO-A。原包裹、账号和渠道已关联，可由有权方按该号取原头程面单。</span>
       <span class="k">尾程</span><span>美中仓 · USPS，尾程面单 DEMO-A 仍关联包裹 A。商家已交工厂贴标，平台标发另查平台回执。</span>
-      <span class="k">交接记录</span><span>2026-11-24 10:35 · ERP 已关联六脉头程成功回执；10:37 · 商家交接原尾程面单。若换厂后无法核实关联或授权，由原授权方核对。</span></div>`;
+      <span class="k">交接记录</span><span>2026-11-24 10:35 · ERP 已关联六脉头程成功回执；10:37 · 商家交接原尾程面单。商家撤推换厂后，另行核对原头程文件归属、原单取件权和乙厂打印资格。</span></div>
+      <button class="btn s mt12" onclick="y2OpenLabelHandoff()">查看换厂面单交接</button>`;
   }
   if (panel === 'b' && !dimensions) {
     detail = `<form id="y2measure" class="mt12">
@@ -1244,7 +1451,7 @@ function tailLog(panel = '') {
 }
 /* 老入口迁移指引：与 PRD §10.1 的 M / F 编号一一对应 */
 const GUIDES={
-  shopExpress:{t:'设置 › 基础设置 › 快递（快递管理）',keep:[['M4','快递开关、发货地址、批量设置发货地址'],['M5','禁用工厂使用哪些快递（新规则执行时自动过滤）']],move:[['M1','国内地区优先配置','国内快递 › 商家规则',{tab:'domestic'}],['M2','分配顺序、同步工厂快递顺序','兜底顺序',{tab:'fallback'}],['M3','自动分配头程渠道规则，保留每条渠道的商家条件、启用状态及工厂配置引用','跨境头程 › 商家规则',{tab:'head'}]]},
+  shopExpress:{t:'设置 › 基础设置 › 快递（快递管理）',keep:[['M2','跨境渠道保留原排序与获权编辑。国内平台映射异常且新旧结果有差异的组，确认切换前沿用原维护和匹配。'],['M4','快递开关、发货地址、批量设置发货地址'],['M5','禁用工厂使用哪些快递（新规则执行时自动过滤）']],move:[['M1','国内地区优先配置','国内快递 › 商家规则',{tab:'domestic'}],['M2','已切换组的国内快递排序、恢复工厂顺序','兜底顺序',{tab:'fallback'}],['M3','自动分配头程渠道规则，保留每条渠道的商家条件、启用状态及工厂配置引用','跨境头程 › 商家规则',{tab:'head'}]]},
   shopSuper:{t:'设置 › 基础设置 › 超级快递',keep:[['M6','商家在此维护共享面单的分配顺序。工厂继续维护共享授权和额度。共享记录按商家和订单平台匹配，同一顺序优先最近更新。']],move:[]},
   shopOrderSuper:{t:'商家订单 › 设置超级快递',keep:[['M8','订单页保留手动设置入口。商家开启超级快递，且当前账号拥有套餐和角色授予的按钮权限时显示。管理员使用套餐权限。'],['M8','手动提交时重新核对操作权限、开关、订单保护和平台相符的共享资源，成功后记录前后值及操作人。自动分配独立读取商家配置与共享记录。']],move:[]},
   waybill:{t:'快递管理 › 电子面单服务',keep:[['F1','快递分配顺序（与「兜底顺序」页签是同一份数据，两处修改同步）'],['F4','网点开关、适用范围、仅工厂手动分配、授权平台和发件信息']],move:[['F2','根据部门、材质和型号配置面单（编辑弹窗中这 3 个字段改为只读）','国内快递 › 网点规则',{ftab:'domestic',kind:'branch'}],['F3','不允许商家设置分配顺序','执行设置 › 允许商家自定义兜底顺序',{ftab:'exec'}]]},
@@ -1270,6 +1477,7 @@ function oldGuide(k,sub){
   ${g.pending?`<h4 class="mb8">按账号核对后迁移</h4><table class="mb8"><tbody>${g.pending.map(a=>row(a,'t-o')).join('')}</tbody></table>`:''}
   ${g.off?`<h4 class="mb8">下线</h4><table class="mb8"><tbody>${g.off.map(a=>row(a,'t-r')).join('')}</tbody></table>`:''}
   ${g.keep.length?`<h4 class="mb8">保留在原页面</h4><table><tbody>${g.keep.map(a=>row(a,'t-i')).join('')}</tbody></table>`:''}
+  ${k==='shopExpress'&&S.role==='shop'?'<div class="bar mt12"><button class="btn s" onclick="legacyChannelEditor()">维护跨境渠道原排序</button><button class="btn s" onclick="domesticMigrationReview()">核对历史平台映射</button></div>':''}
   ${k==='ae'&&S.role==='factory'?`<div class="bar mt12"><button class="btn s" onclick="aeLegacyGroup()">查看买家物流 A 的原规则</button><button class="btn s" onclick="migReport()">查看迁移报告</button></div>`:''}
   ${k==='waybill'?distributionBranchExample():''}
   ${k==='tiktok'&&S.role==='factory'?'<p class="mt12"><button class="btn s" id="tkPartialFromGuide" onclick="tiktokLabelExample()">查看原包面单接续示例</button></p>':''}
@@ -1333,6 +1541,36 @@ function allLogs(){
 }
 const tailMigrationChoice = {shop:null,factory:null};
 let regionMigrationAt = '';
+const domesticMigrationGroups=[
+  {factory:'迁移样本一厂',mapping:'渠道关联平台为拼多多',confirmedAt:''},
+  {factory:'迁移样本二厂',mapping:'渠道关联缺失，商家渠道行原平台为拼多多',confirmedAt:''}
+];
+function domesticMigrationReportRows(){
+  return domesticMigrationGroups.map((g,i)=>`<tr><td>快递管理 · 分配顺序</td><td>${esc(g.factory)} / 拼多多。 ${esc(g.mapping)}</td>
+    <td><span class="tag ${g.confirmedAt?'t-g':'t-o'}">${g.confirmedAt?'已确认切换':'旧组继续生效'}</span></td><td>新入库样本：跨境 X(1) → 普通 D(20)。 ${g.confirmedAt?`演示操作员（商家）于 ${esc(g.confirmedAt)} 确认。`:''}
+    <button class="btn s" onclick="domesticMigrationReview(${i})">${g.confirmedAt?'查看确认记录':'核对候选与影响范围'}</button></td></tr>`).join('');
+}
+function domesticMigrationReview(index=0){
+  if(S.role!=='shop'||!domesticMigrationGroups[index])return;
+  const g=domesticMigrationGroups[index];
+  openModal(`<div class="mh">国内兜底 · 核对历史平台映射<span class="x" onclick="closeModal()">×</span></div><div class="mb">
+    <label>示例商家甲的拼多多订单　<select class="sel" id="dxGroup" onchange="domesticMigrationReview(Number(this.value))">${domesticMigrationGroups.map((x,i)=>`<option value="${i}" ${index===i?'selected':''}>${esc(x.factory)}</option>`).join('')}</select></label>
+    <p>两份独立的历史组样本。当前组的平台取值依据为「${esc(g.mapping)}」。同一笔订单上没有命中上游规则，国内快递 D 顺序为 20，跨境渠道 X 顺序为 1。</p>
+    <table><thead><tr><th>拼多多订单的对照条件</th><th>旧候选和结果</th><th>新国内候选和结果</th></tr></thead><tbody>
+      <tr><td>正常配置对照：X 关联跨境平台</td><td>只有 D → D</td><td>只有 D → D</td></tr>
+      <tr><td>本组历史映射，X 启用且可用</td><td>X(1)、D(20) → X</td><td>只有 D → D</td></tr>
+      <tr><td>同一历史映射，停用 X 的对照</td><td>只有 D → D</td><td>只有 D → D</td></tr></tbody></table>
+    <p>${g.confirmedAt?`演示操作员（商家）于 ${esc(g.confirmedAt)} 确认。从切换后入库的订单开始，本组兜底选 D。`:'本组仍沿用旧匹配和旧维护。确认后，本组新入库订单按国内候选选择 D。'} 原单保留原物流与面单，其他组独立核对。</p>
+    ${g.confirmedAt?'':'<label><input type="checkbox" id="dxReviewed"> 已核对本组旧选 X、新选 D 以及影响范围</label>'}</div>
+    <div class="mf"><button class="btn" onclick="migReport()">返回迁移报告</button>${g.confirmedAt?'':'<button class="btn p" id="dxConfirm" disabled>确认仅切换本组新单</button>'}</div>`,'xl');
+  if(g.confirmedAt)return;
+  const reviewed=$('#dxReviewed'),confirm=$('#dxConfirm');
+  reviewed.onchange=()=>{confirm.disabled=!reviewed.checked};
+  confirm.onclick=()=>{
+    if(S.role!=='shop'||g.confirmedAt||!reviewed.checked)return;
+    g.confirmedAt=nowStr();migReport();
+  };
+}
 function regionMigrationPreview(){
   if(S.role !== 'shop') return;
   openModal(`<div class="mh">预览受影响地区规则<span class="x" onclick="closeModal()">×</span></div>
@@ -1461,13 +1699,14 @@ function aeReportRow(){
 }
 function migReport(){openModal(`<div class="mh">迁移报告<span class="x" onclick="closeModal()">×</span></div><div class="mb">
 <div class="alert a-i">示例记录。核对的是同一订单在同一入口的选物流结果。标记「我已核对」只收起提醒。</div>
-<div class="stat"><div><span class="muted">本页待处理项</span><b>${(S.role==='shop'?(regionMigrationAt?1:2):(aeCutover?0:1))+(tailMigrationChoice[S.role]?0:1)}</b></div>
+<div class="stat"><div><span class="muted">本页待处理项</span><b>${(S.role==='shop'?(regionMigrationAt?1:2)+domesticMigrationGroups.filter(g=>!g.confirmedAt).length:(aeCutover?0:1))+(tailMigrationChoice[S.role]?0:1)}</b></div>
 <div><span class="muted">${S.role==='shop'?'受影响地区规则':'尾程账号策略'}</span><b style="font-size:16px">${S.role==='shop'?(regionMigrationAt?'已确认':'待确认'):(tailMigrationChoice[S.role]?'已按模式确认':'沿用各账号原值')}</b></div></div>
 <table><thead><tr><th>来源</th><th>原记录（示例）</th><th>结果</th><th>说明</th></tr></thead><tbody>
 ${S.role==='shop'?`<tr><td>国内地区优先配置</td><td>北京市 / 朝阳区 → 韵达，原开关启用</td><td><span class="tag ${regionMigrationAt?'t-g':'t-o'}">${regionMigrationAt?'已确认启用':'待预览并确认'}</span></td><td>${regionMigrationAt?`演示操作员（商家）于 ${esc(regionMigrationAt)} 确认，仅对新订单生效。`:'本租户旧同步入库漏匹配，同地址手工单预选可能命中。'} <button class="btn s" onclick="regionMigrationPreview()">${regionMigrationAt?'查看已确认范围':'预览受影响规则'}</button></td></tr>
 <tr><td>国内地区优先配置</td><td>江苏省 / 苏州市的两条记录，启停或目标快递不同</td><td><span class="tag t-o">待核对</span></td><td>保留原记录与旧选择依据。需要确定优先记录后才能合并。</td></tr>
 <tr><td>国内地区优先配置</td><td>Excel 导入，原为关闭</td><td><span class="tag t-i">已迁为停用</span></td><td>保留原停用状态，需要时单独启用。</td></tr>`:`<tr><td>部门 / 材质 / 型号面单</td><td>按部门限制某一快递的网点</td><td><span class="tag t-g">已迁入网点规则</span></td><td>取号时核对实际使用权限；自动任务逐个检查同快递的合资格网点。</td></tr>`}
 ${S.role==='factory'?aeReportRow():''}
+${S.role==='shop'?domesticMigrationReportRows():''}
 <tr><td>自动分配头程渠道规则</td><td>UniUni / US-Local（店铺 ∨ 邮编）</td><td><span class="tag t-g">已拆分</span></td><td>原规则“店铺或邮编满足其一”拆为 2 条规则</td></tr>
 ${S.role==='factory'?'<tr><td>TikTok 美国本土合作物流</td><td>预约弹窗内当前店铺批次的排序</td><td><span class="tag t-i">无存量配置</span></td><td>关窗后清除，迁移规则数为 0。新建长期规则须由工厂主动保存。 <button class="btn s" onclick="oldGuide(\'tiktok\')">原弹窗说明</button></td></tr>':''}
 ${S.role==='shop'?'<tr><td>自动分配头程渠道规则</td><td>Temu 半托美国渠道 · 商家仅店铺甲，引用工厂仅店铺乙</td><td><span class="tag t-i">保留商家原值及工厂引用</span></td><td>按原渠道迁移商家条件与启用状态。 <button class="btn s" onclick="crossLog(\'head\')">核对切换后的命中</button></td></tr>':''}
@@ -2321,7 +2560,12 @@ let UNDO=null;
 function showUndo(txt,fn){UNDO=fn;$('#undoTxt').textContent=txt;$('#undo').classList.add('show');clearTimeout(showUndo._t);showUndo._t=setTimeout(()=>{$('#undo').classList.remove('show');UNDO=null},8000)}
 function doUndo(){if(UNDO){UNDO();UNDO=null;render();toast('已撤销')}$('#undo').classList.remove('show')}
 /* ============ 原型说明 ============ */
-const NOTES=`<h4>原型说明</h4><ul><li>页面使用本地示例数据，刷新后恢复初始样例。</li><li>右下方切换商家和工厂视角。国内规则可试算，跨境页签展示对应发货台匹配日志。</li><li>商家和工厂各有四种尾程模式。迁移报告按登录租户、模式和账号核对原值及切换结果。</li><li>从订单页勾选多笔样例可检查平台指定、原请求待核、人工锁定、已有运单以及设置快递和重新匹配的逐单反馈。</li></ul>`;
+const NOTES=`<h4>原型说明 · v2.11</h4><p>右下方切换商家和工厂视角。示例只在本页运行，刷新后可重新演示。</p>
+  <h4>核对本版的三组订单</h4><ul>
+  <li>商家端打开「查看迁移报告」，在「快递管理 · 分配顺序」一行核对正常订单和历史异常组各自会选哪家快递。</li>
+  <li>两端均可在「跨境尾程 › Temu半托 › 匹配日志示例」查看包裹 A 的已有结果，再打开「查看换厂面单交接」。</li>
+  <li>工厂端打开「平台物流 › 匹配日志示例」，进入建包成功、取面单失败示例。重取原面单后，可继续模拟打印和实际发货。</li></ul>
+  <p>国内规则可试算。迁移报告还可核对两端的四种尾程模式和账号原值。订单页勾选多笔示例，可逐单查看手动设置快递、重新匹配及跳过原因。</p>`;
 function toggleNote(){const p=$('#notePanel');p.innerHTML=NOTES;p.classList.toggle('show')}
 
 /* ============ 渲染 ============ */
