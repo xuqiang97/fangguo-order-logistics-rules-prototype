@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>订单选物流规则 · v2.14 交互原型</title>
+<title>订单选物流规则 · v2.15 交互原型</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:13px;color:#303133;background:#f0f2f5;height:100vh;overflow:hidden}
@@ -2169,9 +2169,10 @@ function lanmaTailPreview(sample='pending'){
     <div class="alert a-w mt12"><div><b>官方店相关配置待核</b><p>发布前核对当前环境实际绑定的官方店租户与接入账号、租户开关、该账号是否保存个人策略，以及共用开关能否隔离。缺少部署证据时不能断定线上会选 UPS 或 FedEx。</p>
     <p>不能隔离时，官方店受影响的配置继续沿用原读写及蓝马调用。其他独立租户依自己的迁移报告处理。</p></div></div>
     <p>选择上方合成样本，可对照 ERP 网页、蓝马首次预选、当前仓列表和提交入参。样本不会修改官方店设置。</p>`}
-    <p><button class="btn" id="lanmaUpload">核对上传已有运单</button></p></div>
+    <p><button class="btn" id="lanmaScope">核对首次预选范围</button> <button class="btn" id="lanmaUpload">核对上传已有运单</button></p></div>
     <div class="mf"><button class="btn" onclick="migReport()">返回迁移报告</button><button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
   $('#lanmaUpload').onclick=()=>lanmaUploadPreview(sample);
+  $('#lanmaScope').onclick=()=>temuFirstPreview('Temu半托','lanma',sample);
   if(!demo)return;
   const selection=$('#lanmaSelection'),submit=$('#lanmaSubmit');
   const updateSubmit=()=>{
@@ -2325,7 +2326,76 @@ function compareTailQuotes(mode,a,b){
 function tailPolicyCard(mode){
   const old=tailUsesOld(mode);
   return `<div class="alert ${old?'a-w':'a-i'}"><div><b>${tailScopeCase[S.role]==='shared'?'本端原策略未核齐且共用开关不可隔离，四模式沿用原入口':old?'账号值待核对，仍在原发货台维护':'账号组已切换，在本页维护'}</b>　${esc(tailPolicySource(mode))} · ${readTailPolicy(mode)}。
-    <div class="bar mt8"><button class="btn s" onclick="tailPolicyEditor('${mode}')">${old?'维护原账号配置':'维护本模式租户策略'}</button><button class="btn s" onclick="tailPolicyPreview('${mode}')">核对员工预选</button>${mode==='Temu半托'?'<button class="btn s" onclick="lanmaTailPreview()">查看蓝马官方店预选对照</button>':''}</div></div></div>`;
+    <div class="bar mt8"><button class="btn s" onclick="tailPolicyEditor('${mode}')">${old?'维护原账号配置':'维护本模式租户策略'}</button><button class="btn s" onclick="tailPolicyPreview('${mode}')">核对员工预选</button>${mode.startsWith('Temu')?`<button class="btn s" onclick="temuFirstPreview('${mode}')">核对首次预选范围</button>`:''}${mode==='Temu半托'?'<button class="btn s" onclick="lanmaTailPreview()">查看蓝马官方店预选对照</button>':''}</div></div></div>`;
+}
+function temuFirstPreview(initialMode,origin=S.role,lanmaSample='pending'){
+  const modes=['Temu半托','Temu本土'];
+  const source=origin==='lanma'?'蓝马 · 固定官方店接入账号':(origin==='shop'?'商家':'工厂')+' · 本租户员工 '+tailAccounts[origin];
+  const actor=()=>origin==='lanma'?'official-demo':S.role+' / '+tailAccounts[S.role];
+  const owner=actor(),orders=modes.flatMap((mode,i)=>['甲店','乙店'].map((store,n)=>({owner,mode,store:mode+'示例'+store,no:(i?'BT':'HT')+'-0'+(n+1)})));
+  const policy={'Temu半托':'UPS','Temu本土':'FedEx'};
+  let mode=initialMode,selected=new Set(),all=false,revision=0,pending=[],unavailable=new Set();
+  let delay=false,check='valid',note='',result=null;
+  const list=()=>orders.filter(o=>o.mode===mode&&o.owner===actor()&&!unavailable.has(o.no));
+  function clearScope(){
+    revision++;selected.clear();all=false;result=null;
+  }
+  function switchMode(next){
+    if(next===mode)return;
+    clearScope();mode=next;delay=false;check='valid';
+    note='已切换模式，上一页勾选、全选及预选结果已清空。请在当前页重新选择。';draw();
+  }
+  function receive(request){
+    if(request.rev!==revision||request.mode!==mode||request.actor!==actor()){
+      note='已忽略旧预选回执。请以当前页的选择和预选结果为准。';draw();return;
+    }
+    const resolved=request.ids.map(id=>list().find(o=>o.no===id));
+    if(!resolved.length||resolved.some(o=>!o||o.mode!==request.mode||o.owner!==request.actor)){
+      clearScope();note='本次范围已变化，整批未预选。请刷新当前模式并重新选择。';draw();return;
+    }
+    result={method:request.method,orders:resolved};note='已完成本次首次预选。';draw();
+  }
+  function submit(method,single){
+    const ids=single?[single]:all?list().map(o=>o.no):Array.from(selected);
+    if(!ids.length)return;
+    const request={rev:++revision,mode,actor:actor(),ids,method};result=null;
+    // 执行前重新核对所选记录的授权和模式。样例只模拟选择之后发生的变化。
+    if(check!=='valid')unavailable.add(ids[ids.length-1]);
+    if(ids.some(id=>!list().some(o=>o.no===id&&o.owner===request.actor&&o.mode===request.mode))){
+      clearScope();note=(check==='access'?'订单的查看授权已变化。':check==='mode'?'订单已移出当前模式。':'订单范围已变化。')+'整批未预选，请在当前页重新选择。';
+      check='valid';draw();return;
+    }
+    if(delay){pending.push(request);note='首次预选已受理，等待回执。';draw()}else receive(request);
+  }
+  function draw(){
+    const rows=list();
+    const modeButtons=modes.map(m=>`<button type="button" class="btn s ${m===mode?'p':''}" data-preview-mode="${m}" aria-pressed="${m===mode}">${m}</button>`).join('');
+    openModal(`<div class="mh">${origin==='lanma'?'蓝马':'ERP 发货台'} · Temu 首次预选<span class="x" onclick="closeModal()">×</span></div><div class="mb">
+      <p>${esc(source)}。样例中同模式的甲、乙两店均已授权。半托策略仅允许 UPS，本土策略仅允许 FedEx。</p>
+      <div class="bar" aria-label="订单模式">${modeButtons}</div><table><thead><tr><th><label class="ck"><input id="temuScopeAll" type="checkbox" ${all?'checked':''} ${rows.length?'':'disabled'}>全选当前模式（${rows.length}）</label></th><th>订单号</th><th>店铺</th><th>操作</th></tr></thead>
+      <tbody>${rows.map(o=>`<tr><td><input type="checkbox" aria-label="勾选 ${o.no}" data-scope-order="${o.no}" ${selected.has(o.no)?'checked':''}></td><td>${o.no}</td><td>${o.store}</td><td><button class="btn s" data-scope-single="${o.no}">单条预选</button></td></tr>`).join('')||'<tr><td colspan="4">当前模式没有可预选的订单。</td></tr>'}</tbody></table>
+      <div class="bar mt8"><span id="temuScopeCount">${mode} · 已选 ${selected.size} 单${all?'（全选）':''}</span><button class="btn p" id="temuScopeSubmit" ${selected.size?'':'disabled'}>预选已选订单</button></div>
+      <div class="bar"><label>样例回执 <select class="sel" id="temuScopeDelay"><option value="now">即时返回</option><option value="later" ${delay?'selected':''}>稍后返回</option></select></label>
+      <label>执行前复核 <select class="sel" id="temuScopeCheck"><option value="valid">身份和模式均有效</option><option value="access" ${check==='access'?'selected':''}>一单授权已失效</option><option value="mode" ${check==='mode'?'selected':''}>一单已移出本模式</option></select></label>
+      ${pending.length?'<button class="btn s" id="temuScopeReceive">接收待到回执</button>':''}</div>
+      <div aria-live="polite"><p id="temuScopeNotice">${esc(note)}</p><div id="temuScopeResult">${result?`<b>${esc(result.method)} · ${mode}首次预选</b><ul>${result.orders.map(o=>`<li>${o.no} · ${o.store} · ${policy[o.mode]}</li>`).join('')}</ul>`:'当前页尚无预选结果。'}</div></div>
+      <p class="small muted">创建物流单 0 次，平台标发 0 次。</p></div><div class="mf">${origin==='lanma'?'<button class="btn" id="scopeBackToLanma">返回蓝马接入样例</button>':''}<button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
+    const modal=$('#modal');
+    modal.querySelectorAll('[data-preview-mode]').forEach(b=>b.onclick=()=>switchMode(b.dataset.previewMode));
+    modal.querySelectorAll('[data-scope-single]').forEach(b=>b.onclick=()=>submit('单条',b.dataset.scopeSingle));
+    modal.querySelectorAll('[data-scope-order]').forEach(b=>b.onchange=()=>{
+      revision++;result=null;all=false;note='';
+      if(b.checked)selected.add(b.dataset.scopeOrder);else selected.delete(b.dataset.scopeOrder);
+      draw();
+    });
+    $('#temuScopeAll').onchange=e=>{clearScope();all=e.target.checked;selected=new Set(all?rows.map(o=>o.no):[]);note='';draw()};
+    $('#temuScopeSubmit').onclick=()=>submit(all?'全选当前模式':'勾选');
+    $('#temuScopeDelay').onchange=e=>{delay=e.target.value==='later'};
+    $('#temuScopeCheck').onchange=e=>{check=e.target.value};
+    if(pending.length)$('#temuScopeReceive').onclick=()=>receive(pending.shift());
+    if(origin==='lanma')$('#scopeBackToLanma').onclick=()=>lanmaTailPreview(lanmaSample);
+  }
+  draw();
 }
 function tailActorSelect(mode,screen){
   return `<label>示例操作账号　<select class="sel" aria-label="示例操作账号" onchange="tailAccounts[S.role]=this.value;render();${screen}('${mode}')">${['A','B','C','D'].map(k=>`<option value="${k}" ${k===tailAccounts[S.role]?'selected':''}>员工 ${k}${k==='D'?'（新增）':tailGroup(mode).accounts[k]?'':'（原未配置）'}</option>`).join('')}</select></label>`;
@@ -4143,7 +4213,7 @@ function sortView(){return [S.role,S.page,S.role==='shop'?S.tab:S.ftab,S.fdomKin
 function showUndo(txt,fn){UNDO=fn;undoView=sortView();$('#undoTxt').textContent=txt;$('#undo').classList.add('show');clearTimeout(showUndo._t);showUndo._t=setTimeout(()=>{$('#undo').classList.remove('show');UNDO=null},8000)}
 function doUndo(){if(UNDO){const notice=UNDO();UNDO=null;render();toast(notice||'已撤销')}$('#undo').classList.remove('show')}
 /* ============ 原型说明 ============ */
-const NOTES=`<h4>原型说明 · v2.14</h4><p>右下方切换商家和工厂视角。示例只在本页运行，刷新后可重新演示。</p>
+const NOTES=`<h4>原型说明 · v2.15</h4><p>右下方切换商家和工厂视角。示例只在本页运行，刷新后可重新演示。</p>
   <h4>迁移和订单验收入口</h4><ul>
   <li>商家端「我的订单」可以分别查看待推送、工厂待审和生产中订单的换厂资格。规则改名后，点命中数可找到原订单，在详情查看命中时的名称和版本。</li>
   <li>商家端打开「查看迁移报告」，在「快递管理 · 分配顺序」一行核对正常订单和历史异常组各自会选哪家快递。</li>
