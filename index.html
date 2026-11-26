@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>订单选物流规则 · v2.13 交互原型</title>
+<title>订单选物流规则 · v2.14 交互原型</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:13px;color:#303133;background:#f0f2f5;height:100vh;overflow:hidden}
@@ -298,6 +298,7 @@ let RULES=[
   {id:12,o:'shop',sc:'head',name:'邮编 01000-30000 走云途',st:1,c:{factory:{op:'in',v:['义乌印花厂']},zip:{mode:'range',a:'01000',b:'30000'}},a:{t:'fixed',ch:'云途 / YT-美国专线'},ov:0,hit:402,last:'2026-11-24 14:12',src:'自动分配头程渠道规则'},
   {id:13,o:'shop',sc:'head',name:'美东仓+USPS/UPS 尾程走燕文',st:1,c:{factory:{op:'in',v:['东莞定制厂']},wh:{op:'in',v:['美东仓','港盈美东仓-C']},tailch:{op:'in',v:['USPS','UPS']}},a:{t:'fixed',ch:'燕文 / YW-特惠'},ov:0,hit:57,last:'2026-11-22 18:00',src:'自动分配头程渠道规则'},
   {id:14,o:'shop',sc:'head',name:'Temu 美国头程 · 商家店铺条件',headBinding:'temuUsStore',useFactory:false,st:1,c:{factory:{op:'in',v:[US_HEAD.factory]},shop:{op:'in',v:[US_HEAD.shops[0]]}},a:{t:'fixed',ch:US_HEAD.channel},hit:0,last:'—',src:'自动分配头程渠道规则 · 店铺条件组'},
+  {id:15,o:'shop',sc:'head',name:'Amazon 全程 · 原店铺条件',st:1,c:{factory:{op:'in',v:['深圳一厂']},platform:{op:'in',v:['Amazon']},shop:{op:'in',v:['Amazon-示例美区店']}},legacyHeadConditions:{wh:{v:['美东仓']},tailch:{v:['UPS']}},a:{t:'fixed',ch:'云途 / YT-美国专线'},hit:0,last:'—',src:'原渠道条件 · 迁移样例'},
   {id:21,o:'factory',sc:'domestic',kind:'normal',name:'默认：偏远地区走邮政',st:1,c:{region:{op:'in',v:['新疆维吾尔自治区','西藏自治区','青海省']}},a:{t:'fixed',cp:'邮政EMS'},ov:0,hit:19,last:'2026-11-24 08:10',src:''},
   {id:22,o:'factory',sc:'domestic',kind:'normal',name:'默认：示例商家乙 全部走韵达',st:1,c:{customer:{op:'in',v:['示例商家乙']}},a:{t:'fixed',cp:'韵达'},ov:0,hit:3021,last:'2026-11-24 15:10',src:''},
   {id:23,o:'factory',sc:'domestic',kind:'branch',name:'杂件部用中通义乌网点',st:1,c:{dept:{op:'in',v:['杂件部']}},a:{t:'fixed',cp:'中通',branch:'中通-义乌北苑网点'},ov:0,hit:640,last:'2026-11-24 14:55',src:'网点·部门关联'},
@@ -305,6 +306,7 @@ let RULES=[
   {id:31,o:'factory',sc:'head',name:'默认：美西仓走 GOFO',st:1,c:{wh:{op:'in',v:['美西仓','港盈美西仓-C']}},a:{t:'fixed',ch:'GOFO / Ground'},ov:0,hit:150,last:'2026-11-24 13:20',src:'跨境物流管理·渠道规则'},
   {id:32,o:'factory',sc:'head',name:'Temu 美国头程 · 工厂店铺条件',headBinding:'temuUsStore',st:1,c:{shop:{op:'in',v:[US_HEAD.shops[1]]}},a:{t:'fixed',ch:US_HEAD.channel},hit:0,last:'—',src:'跨境物流管理·店铺条件组'},
   {id:33,o:'factory',sc:'head',name:'旧渠道 · 深圳一厂已停用',st:0,c:{wh:{op:'in',v:['港盈美东仓-C']}},a:{t:'fixed',ch:'USPS / Ground Advantage'},hit:0,last:'—',src:'跨境物流管理·已停用渠道示例'},
+  {id:34,o:'factory',sc:'head',name:'Shopify 全程 · 原仓和尾程条件',st:0,c:{platform:{op:'in',v:['Shopify']}},legacyHeadConditions:{wh:{v:['美东仓']},tailch:{v:['UPS']}},a:{t:'fixed',ch:'云途 / YT-美国专线'},hit:0,last:'—',src:'原配置未命中 · 迁移样例'},
   {id:40,o:'shop',sc:'tail',sub:'Temu半托',name:'美国 Y2 按邮编选美东仓 USPS',st:1,c:{tag:{op:'in',v:['Y2']},site:{op:'in',v:['美区']},zip:{prefix:'2',exact:'01001',range:{start:'005',end:'009'}}},a:{t:'fixed',ch:'USPS / Ground Advantage',wh:'美东仓',legacyPostalWarehouse:{shopId:'shop-A',storeId:'store-A',warehouseId:'W1'}},hit:18,last:'2026-11-24 16:10',src:'Temu 半托 · 邮编指定发货仓（示例）'},
   {id:46,o:'shop',sc:'tail',sub:'Temu本土',name:'本土店从可用仓中选最低成本',st:1,c:{},a:{t:'opt',list:[],allAvailable:true,m:'cost'},hit:8,last:'2026-11-24 15:10',src:'Temu 本土 · 统一配置（示例）'},
   {id:47,o:'shop',sc:'tail',sub:'Shein半托',name:'半托店按可报价的仓选最低成本',st:1,c:{},a:{t:'opt',list:['美东仓','美西仓'],m:'cost'},hit:6,last:'2026-11-24 14:10',src:'Shein 半托 · 尾程分配逻辑（示例）'},
@@ -331,19 +333,50 @@ function unavailableHead(rule){
   const pool=headPool(rule);
   return values.filter(channel=>channel&&!pool.includes(channel));
 }
+const fullLegPlatforms=['Amazon','Shopify'];
+const fullLegFields=['platform','factory','customer','shop','zip'];
+function headFullLegScope(rule){
+  if(rule.sc!=='head')return '';
+  const p=rule.c.platform;
+  let platforms=p?.v?.length?(p.op==='nin'?HEAD_PF.filter(k=>!p.v.includes(k)):p.v):HEAD_PF;
+  const shops=rule.c.shop;
+  if(shops?.v?.length&&shops.op!=='nin'){
+    const modes=shops.v.map(s=>fullLegPlatforms.find(p=>s.startsWith(p+'-'))||HEAD_PF.find(p=>s.startsWith(p))||(s.startsWith('Temu')?'Temu半托美区':''));
+    if(modes.every(Boolean))platforms=platforms.filter(p=>modes.includes(p));
+  }
+  if(!platforms.length)return 'empty';
+  if(!platforms.some(p=>fullLegPlatforms.includes(p)))return '';
+  if(platforms.every(p=>fullLegPlatforms.includes(p)))return 'full';
+  const namedFullStore=shops?.op!=='nin'&&shops?.v?.some(s=>fullLegPlatforms.some(p=>s.startsWith(p+'-')));
+  return p?.v?.length||namedFullStore?'mixed':'implicit';
+}
+function headConditionIssue(rule){
+  const scope=headFullLegScope(rule);
+  if(!scope||scope==='implicit')return '';
+  if(scope==='empty')return '所选店铺与订单平台范围无交集，请核对平台或店铺后启用。';
+  const extra=Object.keys(rule.c).filter(k=>!fullLegFields.includes(k));
+  if(extra.length)return 'Amazon / Shopify 全程只按店铺或邮编选渠。请移除「'+extra.map(condName).join('、')+'」，或按平台拆分后启用。';
+  if(scope==='full'&&!rule.c.shop?.v?.length&&!rule.c.zip)return '请设置全程选渠使用的店铺或邮编。只有原仓和尾程值时，保留为停用。';
+  return '';
+}
 function headChoiceError(rule){
   if(rule.sc!=='head')return '';
   if(rule.o==='shop'&&rule.c.factory?.v.length!==1)return '请选择一个适用工厂';
   if(rule.a.t==='fixed'&&!rule.a.ch)return '请选择本厂已开启的头程渠道';
   if(rule.a.t==='opt'&&!rule.a.list.length)return '请添加本厂已开启的头程渠道';
   const missing=unavailableHead(rule);
-  return missing.length?'渠道未开通或已失效，请重选：'+missing.join('、'):'';
+  return missing.length?'渠道未开通或已失效，请重选：'+missing.join('、'):headConditionIssue(rule);
 }
 let LOGS=[];/* {rid,name,time,user,act,detail,ver} */
 let NOW_MIN=0;
 function nowStr(){NOW_MIN++;const m=10+NOW_MIN;return `${TODAY} ${String(9+Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`}
 function ver(r){return Math.max(1,LOGS.filter(l=>l.rid===r.id).length+(r.created===TODAY?0:3))}
-function addLog(r,act,detail){const entry={rid:r.id,name:r.name,owner:r.o,time:nowStr(),user:S.role==='shop'?'演示操作员（商家）':'演示操作员（工厂）',act,detail};LOGS.unshift(entry);entry.ver='v'+ver(r)}
+function addLog(r,act,detail,snapshot,actor){
+  const entry={rid:r.id,name:r.name,owner:r.o,group:grpKey(r),time:nowStr(),
+    user:actor||(S.role==='shop'?'演示操作员（商家）':'演示操作员（工厂）'),act,detail};
+  if(snapshot)entry.snapshot=snapshot;
+  LOGS.unshift(entry);entry.ver='v'+ver(r);
+}
 function diffRule(a,b){
   const out=[];
   if(a.name!==b.name) out.push(`名称：${a.name} → ${b.name}`);
@@ -579,7 +612,7 @@ function condSummary(c,hide,kind){
     if(v.v) s=(v.op==='nin'?'<span class="tag t-r" style="line-height:16px;padding:0 4px">不属于</span> ':'')+esc(v.v.slice(0,4).join('、'))+(v.v.length>4?` 等${v.v.length}项`:'');
     if(k==='material'&&kind!=='branch')s+=(v.op==='nin'?'（整单均不含）':'（任一件含有）');
     else if(k==='zip') s=!v.mode?postalLabels(v):v.mode==='range'?`${esc(v.a)} ~ ${esc(v.b)}`:(v.mode==='prefix'?`以 ${esc(v.a)} 开头`:`精确 ${esc(v.a)}`);
-    else if(v.min!==undefined) s=`${esc(v.min||'-∞')} ~ ${esc(v.max||'+∞')}`;
+    else if(v.min!==undefined) s=`${esc(v.min===''||v.min==null?'-∞':v.min)} ~ ${esc(v.max===''||v.max==null?'+∞':v.max)}`;
     return `<div><span class="k">${condName(k)}：</span>${s}</div>`;
   }).join('');
 }
@@ -677,9 +710,21 @@ function enabledRules(owner, draft, kind = 'normal') {
   }
   return list.filter(rule => rule.st);
 }
+function estimateBranch(order,cp,options={}){
+  if(order.fac===MYFAC&&EXEC.branch){
+    const context={...order,operatorDept:options.operatorDept||''};
+    for(const rule of enabledRules('factory',options.extra,'branch')){
+      if(rule.a.cp!==cp)continue;
+      const match=matchConds(rule.c,context,'branch');
+      if(match.missing)return {branch:'',pending:match.why};
+      if(match.ok)return {branch:rule.a.branch,reason:'命中网点规则「'+rule.name+'」'};
+    }
+  }
+  return {branch:cp+'-'+order.fac+'网点',reason:order.fac===MYFAC&&!EXEC.branch?'工厂未启用网点规则，按网点顺序选择':'未命中网点规则，按网点顺序选择'};
+}
 function runEngine(o,opt){
   opt=opt||{};const steps=[];const add=(cls,tt,td)=>steps.push({cls,tt,td:td||''});
-  const res={cp:'',branch:'',sup:'',src:'none',rule:'',reason:''};
+  const res={cp:'',branch:'',sup:'',src:'none',rule:'',reason:'',unavailableRules:[]};
   if(protectedReason(o)){
     (o.hist||[]).forEach(h=>add(h[0],h[1],h[2]));
     add('warn',protectedReason(o),'保留来源和已有结果');
@@ -713,6 +758,7 @@ function runEngine(o,opt){
       const cands=r.a.t==='fixed'?[r.a.cp]:r.a.list;const bad=[];
       for(const cp of cands){const why=avail(cp,o);if(!why){add('ok',`${nm} 命中 → ${cp}`,m.why+(bad.length?'；已跳过：'+bad.join('；'):''));return {cp,r,src}}bad.push(why)}
       add('warn',`${nm} 命中，但物流不可用，继续往下匹配`,bad.join('；'));warns.push(`「${r.name}」命中但${bad.join('、')}`);
+      res.unavailableRules.push(r.id);
     }
     return null;
   };
@@ -725,35 +771,25 @@ function runEngine(o,opt){
     else{const l=enabledRules('factory',opt.extra);if(!l.length)add('no','工厂默认规则：没有启用的规则');else hit=tryRules(l,'工厂默认规则','factory')}
   }
   if(hit?.incomplete){res.incomplete=true;res.reason=hit.why;return {steps,res}}
-  if(hit&&hit.none){res.reason=`命中「${hit.r.name}」，动作为“不分配”，需人工设置快递`;return {steps,res}}
   if(!hit){
     const fb=orderFallback(o.cust,o.fac,o.pf);const bad=[];
     for(const x of fb){const why=x.virtual?'':avail(x.cp,o);if(!why){add('ok',`兜底顺序（${o.pf}，${x.source}，${allowCustom(o)&&customerFallback.has(fallbackKey(o.cust,o.fac,x.source))?'商家顺序':'工厂顺序'}）→ ${x.cp}`,bad.length?'已跳过：'+bad.join('；'):'取第一个可用的快递');hit={cp:x.cp,virtual:x.virtual,src:'fallback',r:{name:'兜底顺序'}};break}bad.push(why)}
     if(!hit){add('warn','兜底顺序：没有可用的快递',bad.join('；')||'未开启任何快递');res.reason=warns.concat(['兜底顺序中：'+(bad.join('；')||'未开启任何快递')]).join('；');return {steps,res}}
   }
-  res.cp=hit.cp;res.src=hit.src;res.rule=hit.r.name;
+  res.rule=hit.r.name;
   if(hit.r.id){res.ruleId=hit.r.id;res.ruleVersion='v'+ver(hit.r)}
-  let br=null;
+  if(hit.none){res.reason=`命中「${res.rule}」，动作为“不分配”，需人工设置快递`;return {steps,res}}
+  res.cp=hit.cp;res.src=hit.src;
   if(hit.virtual){
     res.branch='虚拟网点（仅占位）';
     add('warn','虚拟快递不支持预约面单','本厂直接取号会停止。他厂代发需核对目标工厂的映射和真实网点。');
     res.sup=selectSuper(o,opt,add);
     return {steps,res};
   }
-  if (o.fac === MYFAC && EXEC.branch) {
-    const context={...o,operatorDept:opt.operatorDept || ''};
-    for(const rule of enabledRules('factory', opt.extra, 'branch')){
-      if(rule.a.cp!==hit.cp)continue;
-      const match=matchConds(rule.c,context,'branch');
-      if(match.missing){res.branchPending=match.why;break}
-      if(match.ok){br=rule;break}
-    }
-  }
+  const estimate=estimateBranch(o,hit.cp,opt);
+  res.branch=estimate.branch;res.branchPending=estimate.pending||'';
   if(res.branchPending)add('warn','预计网点待核对',res.branchPending);
-  else{
-    res.branch=br?br.a.branch:`${hit.cp}-${o.fac}网点`;
-    add('fin',`预计网点：${res.branch}`,br?`命中网点规则「${br.name}」`:(o.fac===MYFAC&&!EXEC.branch?'工厂未启用网点规则，按网点顺序选择':'未命中网点规则，按网点顺序选择'));
-  }
+  else add('fin',`预计网点：${res.branch}`,estimate.reason);
   res.sup=selectSuper(o,opt,add);
   return {steps,res};
 }
@@ -776,7 +812,13 @@ function sameSelection(a,b){
 }
 function applyEngine(o,opt){
   const prior=o.cp||'未匹配';const priorSuper=o.sup||'无';const {steps,res}=runEngine(o,opt);if(res.keep) return false;
-  const at=opt&&opt.time?opt.time:(NOW_MIN?nowStr():'2026-11-24 09:12');
+  const at=opt?.time||nowStr();
+  if(!opt?.seeded){
+    for(const id of res.unavailableRules){
+      const rule=RULES.find(r=>r.id===id);
+      if(rule)rule.unav=(rule.unav||0)+1;
+    }
+  }
   if(res.incomplete){
     o.matchPending=res.reason;
     if(!o.src){o.src='none';o.cp=''}
@@ -787,16 +829,25 @@ function applyEngine(o,opt){
   o.matchPending='';o.branchPending=res.branchPending||'';
   Object.assign(o,{cp:res.cp,branch:res.branch,sup:res.sup,src:res.src,rule:res.rule,ruleId:res.ruleId,ruleVersion:res.ruleVersion,reason:res.reason,lock:0,op:'',trace:steps,traceAt:at});
   if(o.lines){syncUnbookedLines(o);o.lastFirstFactory=false}
-  if(o.ruleId)rememberHit(o,at);
-  addEvt(o,`${(opt&&opt.why)||'自动匹配'}：${prior} → ${res.cp||'未匹配'}（${SRC[res.src][0]}${res.rule&&res.src!=='fallback'?'「'+res.rule+'」':''}）${priorSuper!==(res.sup||'无')?'；超级快递 '+priorSuper+' → '+(res.sup||'无'):''}`,at);return true;
+  if(o.ruleId)rememberHit(o,at,!opt?.seeded);
+  const explanation=res.src==='none'?res.reason:SRC[res.src][0]+(res.rule&&res.src!=='fallback'?'「'+res.rule+'」':'');
+  addEvt(o,`${(opt&&opt.why)||'自动匹配'}：${prior} → ${res.cp||'未匹配'}（${explanation}）${priorSuper!==(res.sup||'无')?'；超级快递 '+priorSuper+' → '+(res.sup||'无'):''}`,at);return true;
 }
 function traceHtml(steps){return `<div class="trace">${steps.map(s=>`<div class="ti ${s.cls||'no'}"><div class="tt">${esc(s.tt)}</div>${s.td?`<div class="td">${esc(s.td)}</div>`:''}</div>`).join('')}</div>`}
 function visibleOrders(){
   return ORDERS.filter(o=>S.role==='shop'?o.cust===ME:
     o.fac===MYFAC&&o.factoryReceived&&!o.awaitingPush&&!['待整理','待推送','已反审'].includes(o.st));
 }
-function rememberHit(order,at){
-  (order.ruleHits??=[]).push({id:order.ruleId,name:order.rule,version:order.ruleVersion,at});
+function rememberHit(order,at,updateCounts=false){
+  if(updateCounts){
+    const rule=RULES.find(r=>r.id===order.ruleId);
+    if(rule){
+      if(!recentRuleHit(order,rule.id))rule.hit++;
+      rule.last=at;
+    }
+  }
+  const outcome=order.src==='none'?'不分配，转人工处理':'已选 '+order.cp;
+  (order.ruleHits??=[]).push({id:order.ruleId,name:order.rule,version:order.ruleVersion,at,outcome});
 }
 function recentRuleHit(order,id){
   const end=Date.parse(TODAY+'T00:00:00Z'),start=end-6*86400000;
@@ -825,7 +876,7 @@ ORDERS.forEach(o=>{
   else if(o.src==='import') addEvt(o,`导入订单时带入快递 ${o.cp}，物流锁定`,'2026-11-24 09:05');
   else if(o.src==='platform') addEvt(o,`平台指定物流（${o.pf}），物流锁定`,'2026-11-24 09:05');
   else if(o.st==='已取号') {addEvt(o,`入库自动匹配：${o.cp}（工厂默认规则「${o.rule}」）`,'2026-11-24 08:40');addEvt(o,'获取运单号成功，物流锁定','2026-11-24 11:02')}
-  matchOnEntry(o,{why:'入库自动匹配',time:'2026-11-24 09:12'});
+  matchOnEntry(o,{why:'入库自动匹配',time:'2026-11-24 09:12',seeded:true});
 });
 
 /* ============ 菜单 ============ */
@@ -886,6 +937,35 @@ function filterRules(owner,sc,extra){
     .filter(r=>S.stF==='all'||String(r.st)===S.stF)
     .filter(r=>!S.facF||r.o!=='shop'||!r.c.factory||r.c.factory.v.includes(S.facF));
 }
+function currentRuleGroup(){
+  const sc=curScene();
+  return grpKey({o:S.role,sc,kind:S.role==='factory'&&sc==='domestic'?S.fdomKind:'normal',sub:sc==='tail'?S.tailSub:''});
+}
+function visibleRuleTargets(){
+  const sc=curScene();
+  if(S.page!=='rules'||!SCENES[sc]||(sc==='tail'&&tailUsesOld(S.tailSub)))return [];
+  return filterRules(S.role,sc,r=>grpKey(r)===currentRuleGroup());
+}
+function ruleScopeLabel(r){
+  const scope=r.o==='shop'?ME:MYFAC;
+  const part=r.sub||(r.o==='factory'&&r.sc==='domestic'?(r.kind==='branch'?'网点规则':'默认规则'):'');
+  return [scope,SCENES[r.sc].name,part].filter(Boolean).join(' · ');
+}
+function setRuleFilter(field,value){
+  if(S[field]!==value){S[field]=value;S.sel.clear()}
+  render();
+}
+function ruleActionScope(id){
+  const rules=visibleRuleTargets().filter(r=>id===undefined?S.sel.has(r.id):r.id===id);
+  const scope=JSON.stringify([S.page,currentRuleGroup(),S.kw,S.stF,S.facF,rules.map(r=>[r.id,ver(r),r.st,r.hit])]);
+  return {rules,scope};
+}
+function confirmRuleScope(original,id){
+  const current=ruleActionScope(id);
+  if(current.scope===original.scope)return true;
+  closeModal();S.sel.clear();render();
+  toast('规则、筛选或勾选范围已变化。本次未处理，请重新勾选核对。');return false;
+}
 function orderFlow(cur){
   if(curScene()==='ae')return '<div class="flow"><span class="st">买家指定物流、目的国</span><span class="ar">›</span><span class="st cur">按本厂渠道规则匹配</span><span class="ar">›</span><span class="st">未命中时按买家物流直配已开启渠道</span></div>';
   if(curScene()==='pf')return '<div class="flow"><span class="st">平台返回本单可用服务</span><span class="ar">›</span><span class="st cur">按适用策略预选</span><span class="ar">›</span><span class="st">逐单核对并确认最终服务</span></div>';
@@ -902,17 +982,17 @@ function rulesTable(list,opt){
   return `${filtered&&!opt.ro?'<div class="alert a-w">当前有筛选条件，拖拽排序已暂停；清空筛选后可拖拽调整优先级</div>':''}<table><thead><tr>
     ${opt.ro?'':'<th style="width:30px"><input type="checkbox" '+(list.every(r=>S.sel.has(r.id))?'checked':'')+' onchange="selAll(this,['+list.map(r=>r.id).join(',')+'])"></th><th style="width:64px">排序</th>'}
     <th style="width:48px">优先级</th><th>规则名称</th><th style="width:30%">条件（且）</th><th>动作</th>
-    <th style="width:130px" title="命中并生效的订单数；“命中但不可用”单独统计">近7天命中</th><th style="width:70px">状态</th>${opt.ro?'':'<th style="width:180px">操作</th>'}
+    <th style="width:130px" title="按订单统计已生效的规则，包含命中“不分配”后转人工的订单。候选不可用时单列次数。">近7天命中</th><th style="width:70px">状态</th>${opt.ro?'':'<th style="width:180px">操作</th>'}
   </tr></thead><tbody>${list.map(r=>{
     const zero=r.hit===0&&r.st===1&&r.created<'2026-10-25';
     const fresh=r.created===TODAY;
     return `<tr draggable="${!opt.ro&&!filtered}" data-id="${r.id}" class="${zero?'grey':''}">
-      ${opt.ro?'':`<td><input type="checkbox" ${S.sel.has(r.id)?'checked':''} onchange="tog(${r.id},this.checked)"></td><td style="white-space:nowrap">${filtered?'':`<span class="handle" title="拖拽调整优先级">⋮⋮</span><a class="small" title="上移" onclick="moveRule(${r.id},-1)">↑</a><a class="small" title="下移" onclick="moveRule(${r.id},1)">↓</a>`}</td>`}
+      ${opt.ro?'':`<td><input type="checkbox" ${S.sel.has(r.id)?'checked':''} onchange="tog(${r.id},this.checked);render()"></td><td style="white-space:nowrap">${filtered?'':`<span class="handle" title="拖拽调整优先级">⋮⋮</span><a class="small" title="上移" onclick="moveRule(${r.id},-1)">↑</a><a class="small" title="下移" onclick="moveRule(${r.id},1)">↓</a>`}</td>`}
       <td>${pos(r)}</td>
       <td><div>${esc(r.name)}${fresh?' <span class="tag t-b">新</span>':''}</div>${r.src?`<div class="small muted">迁移自：${esc(r.src)}</div>`:''}${zero?'<span class="tag t-o mt8" title="已启用超过 30 天且没有命中过，建议检查条件或清理">30天未命中</span>':''}</td>
-      <td class="cond-sum">${condSummary(r.c,opt.hide,r.kind)}</td>
+      <td class="cond-sum">${condSummary(r.c,opt.hide,r.kind)}${r.legacyHeadConditions?'<div class="small muted">原仓及尾程条件仅供核对，未参与全程匹配。</div>':''}${headFullLegScope(r)==='implicit'&&Object.keys(r.c).some(k=>!fullLegFields.includes(k))?'<div class="small muted">此条件组合仅用于支持它的头程入口，Amazon / Shopify 全程跳过。</div>':''}</td>
       <td>${actSummary(r.a)}${r.headBinding&&r.o==='shop'?`<div class="small muted">配置来源：${r.st?(r.useFactory?'工厂条件':'商家条件'):'商家规则已停用'}</div>`:''}${unavailableHead(r).length?`<div class="small" style="color:#b45309">历史渠道未开通或已失效：${esc(unavailableHead(r).join('、'))}</div>`:''}</td>
-      <td>${opt.ro?(fresh?'统计中':r.hit):`<a title="查看命中的订单" onclick="ordersOfRule(${r.id})">${fresh?'统计中':r.hit}</a>`}${r.unav&&!fresh?`<div class="small" style="color:${r.unav/(r.hit+r.unav)>0.2?'#f56c6c':'#e6a23c'}" title="条件满足、但所选物流在订单推送工厂不可用（未开通 / 被禁用 / 管控区域），已继续往下匹配">命中但不可用 ${r.unav}${r.unav/(r.hit+r.unav)>0.2?' ⚠':''}</div>`:''}<div class="small muted">${esc(r.last)}</div></td>
+      <td>${opt.ro?(fresh?'统计中':r.hit):`<a title="查看命中的订单" onclick="ordersOfRule(${r.id})">${fresh?'统计中':r.hit}</a>`}${r.unav?`<div class="small" style="color:${r.unav/(r.hit+r.unav)>0.2?'#f56c6c':'#e6a23c'}" title="条件满足、但所选物流在订单推送工厂不可用（未开通 / 被禁用 / 管控区域），已继续往下匹配">命中但不可用 ${r.unav}${r.unav/(r.hit+r.unav)>0.2?' ⚠':''}</div>`:''}<div class="small muted">${esc(r.last)}</div></td>
       <td>${opt.ro?(r.st?'<span class="tag t-g">启用</span>':'<span class="tag t-i">停用</span>'):`<span class="sw ${r.st?'on':''}" onclick="toggleSt(${r.id})"></span>`}</td>
       ${opt.ro?'':`<td><button class="btn txt" onclick="editRule(${r.id})">编辑</button>${r.sub==='Temu半托'&&r.a.t==='fixed'&&r.c.zip?`<button class="btn txt" onclick="tailPostalBoundary(${r.id})">试算邮编</button>`:''}${r.sc==='tail'&&r.a.t==='opt'&&['time','cost'].includes(r.a.m)?'<button class="btn txt" onclick="tailGroupQuotePreview(\''+r.sub+'\','+r.id+')">核对候选组报价</button>':''}<button class="btn txt" onclick="copyRule(${r.id})">复制</button><button class="btn txt" onclick="ruleLog(${r.id})">日志</button><button class="btn txt d" onclick="delRule(${r.id})">删除</button></td>`}
     </tr>`}).join('')}</tbody></table>`;
@@ -1065,20 +1145,48 @@ function crossLog(scene,headStep='rule'){
   const sample=samples[scene];if(!sample)return;
   const merchantHead=scene==='head'&&S.role==='shop';
   const body=merchantHead?merchantHeadComparison(headStep):`<h4>${esc(sample[1])}</h4>${traceHtml([{cls:'ok',tt:sample[2]},{cls:'ok',tt:sample[3]},{cls:'fin',tt:sample[4]}])}` + (scene==='pf'&&S.role==='factory'?`<p class="mt12"><button class="btn s" id="tkPartialFromLog" onclick="tiktokLabelExample()">查看建包成功、取面单失败示例</button></p>`:'');
-  openModal(`<div class="mh">${esc(sample[0])} · 匹配日志示例<span class="x" onclick="closeModal()">×</span></div><div class="mb">${body}</div><div class="mf">${scene==='head'?'<button class="btn" onclick="tailLog(\'c\')">查看六脉头程部分成功示例</button>':''}<button class="btn" onclick="closeModal()">关闭</button></div>`);
+  openModal(`<div class="mh">${esc(sample[0])} · 匹配日志示例<span class="x" onclick="closeModal()">×</span></div><div class="mb">${body}</div><div class="mf">${scene==='head'?'<button class="btn" onclick="fullLegPreview()">核对 Amazon / Shopify 全程</button><button class="btn" onclick="tailLog(\'c\')">查看六脉头程部分成功示例</button>':''}<button class="btn" onclick="closeModal()">关闭</button></div>`);
+}
+function fullLegPreview(){
+  const rules=RULES.filter(r=>r.o===S.role&&r.sc==='head'&&headFullLegScope(r)&&r.a.t==='fixed');
+  if(!rules.length){toast('本端没有可核对的全程固定渠道规则');return}
+  const first=rules.find(r=>r.legacyHeadConditions)||rules[0];
+  openModal(`<div class="mh">Amazon / Shopify · 按订单核对全程选渠<span class="x" onclick="closeModal()">×</span></div><div class="mb"><p>每次核对本端的一条固定渠道规则。样本满足工厂和客户范围，仓为美东仓、尾程为 UPS。</p>
+    <label>规则 <select id="fullLegRule" class="sel">${rules.map(r=>`<option value="${r.id}" ${r===first?'selected':''}>${esc(r.name)}</option>`).join('')}</select></label>
+    <div class="bar mt8"><label>订单平台 <select class="sel" id="fullLegPlatform">${fullLegPlatforms.map(p=>`<option ${first.c.platform?.v.includes(p)?'selected':''}>${p}</option>`).join('')}</select></label>
+    <label>店铺 <select class="sel" id="fullLegStore"></select></label><label>邮编 <input id="fullLegZip" class="ipt" value="02108" style="width:100px"></label></div><p id="fullLegResult" aria-live="polite"></p>
+    <p class="small muted">仅核对预选。本次物流下单数为 0。</p></div><div class="mf"><button class="btn" onclick="crossLog('head')">返回匹配日志</button><button class="btn" onclick="closeModal()">关闭</button></div>`);
+  const platform=$('#fullLegPlatform'),store=$('#fullLegStore'),zip=$('#fullLegZip'),list=$('#fullLegRule');
+  const includes=(cond,value)=>!cond||(cond.op==='nin'?!cond.v.includes(value):cond.v.includes(value));
+  function draw(){
+    const rule=rules.find(r=>r.id===Number(list.value)),c=rule.c,z=c.zip,value=zip.value.trim().slice(0,5);
+    const zipMatch=!z||(z.mode==='range'?value>=z.a&&value<=z.b:z.a.split(',').some(x=>z.mode==='exact'?value===x.trim():value.startsWith(x.trim())));
+    let reason='';
+    if(!rule.st)reason='规则已停用';
+    else if(!includes(c.platform,platform.value))reason='平台不在本规则范围';
+    else if(Object.keys(c).some(k=>!fullLegFields.includes(k)))reason='本条件组合只适用于支持它的头程入口';
+    else if(!c.shop&&!z)reason='本规则没有可用于全程匹配的店铺或邮编';
+    else if(!includes(c.shop,store.value)||!zipMatch)reason='店铺或邮编条件未满足';
+    else if(unavailableHead(rule).length)reason='渠道已失效';
+    $('#fullLegResult').textContent=reason?'未预选 · '+reason+'。':'本单预选 '+rule.a.ch+'。';
+  }
+  function stores(){store.replaceChildren(...['示例美区店','示例乙店'].map(s=>new Option(platform.value+'-'+s)));draw();}
+  platform.onchange=stores;store.onchange=draw;zip.oninput=draw;list.onchange=draw;stores();
 }
 function toolbar(scene){
+  const selectedCount=ruleActionScope().rules.length;
+  const batchDisabled=selectedCount?'':'disabled';
   return `<div class="bar">
     <button class="btn p" onclick="editRule()">＋ 新建规则</button>
     ${scene==='domestic'&&!(S.role==='factory'&&S.fdomKind==='branch')?`<select class="sel" onchange="if(this.value!==''){editRule(0,JSON.parse(JSON.stringify(TPLS[+this.value].p)))}this.value=''"><option value="">从模板新建…</option>${TPLS.map((x,i)=>`<option value="${i}">${x.n}</option>`).join('')}</select>`:''}
     ${scene==='domestic'?'<button class="btn" onclick="trial()">🔍 规则试算</button>':`<button class="btn" onclick="crossLog('${scene}')">匹配日志示例</button>`}
     ${scene==='domestic'&&!(S.role==='factory'&&S.fdomKind==='branch')?'<button class="btn" onclick="importRegion()">导入地区规则</button>':''}
-    ${scene==='domestic'?'<button class="btn" onclick="toast(\'已导出当前页签全部规则（Excel）\')">导出</button>':''}
-    <button class="btn" onclick="batchSt(1)">批量启用</button><button class="btn" onclick="batchSt(0)">批量停用</button><button class="btn d" onclick="delRule()">批量删除</button><button class="btn" onclick="allLogs()">操作记录</button>${S['mig_'+S.role]?'<button class="btn" onclick="migReport()">迁移报告</button>':''}
+    ${scene==='domestic'?'<button class="btn" title="下载当前分组和筛选范围内的地区规则，包含全部配置值" onclick="exportRegionRules()">导出地区规则</button>':''}
+    <span class="small muted">已选 ${selectedCount} 条</span><button class="btn" ${batchDisabled} onclick="batchSt(1)">批量启用</button><button class="btn" ${batchDisabled} onclick="batchSt(0)">批量停用</button><button class="btn d" ${batchDisabled} onclick="delRule()">批量删除</button><button class="btn" onclick="allLogs()">操作记录</button>${S['mig_'+S.role]?'<button class="btn" onclick="migReport()">迁移报告</button>':''}
     <span class="sp"></span>
-    ${S.role==='shop'&&scene!=='tail'?`<select class="sel" onchange="S.facF=this.value;render()"><option value="">全部工厂</option>${FACTORIES.map(f=>`<option ${S.facF===f?'selected':''}>${f}</option>`).join('')}</select>`:''}
-    <input class="ipt" placeholder="规则名称" value="${esc(S.kw)}" onchange="S.kw=this.value;render()" style="width:160px">
-    <select class="sel" onchange="S.stF=this.value;render()"><option value="all">全部状态</option><option value="1" ${S.stF==='1'?'selected':''}>启用</option><option value="0" ${S.stF==='0'?'selected':''}>停用</option></select>
+    ${S.role==='shop'&&scene!=='tail'?`<select class="sel" onchange="setRuleFilter('facF',this.value)"><option value="">全部工厂</option>${FACTORIES.map(f=>`<option ${S.facF===f?'selected':''}>${f}</option>`).join('')}</select>`:''}
+    <input class="ipt" placeholder="规则名称" value="${esc(S.kw)}" onchange="setRuleFilter('kw',this.value)" style="width:160px">
+    <select class="sel" onchange="setRuleFilter('stF',this.value)"><option value="all">全部状态</option><option value="1" ${S.stF==='1'?'selected':''}>启用</option><option value="0" ${S.stF==='0'?'selected':''}>停用</option></select>
   </div>`;
 }
 function migrateBanner(){
@@ -1156,7 +1264,7 @@ function renderRulesFactory(){
   h+=`<div class="card">${migrateBanner()}<div class="tabs">${tabs.map(t=>`<span class="${S.ftab===t[0]?'on':''}" onclick="S.ftab='${t[0]}';S.sel.clear();render()">${t[1]}</span>`).join('')}</div>`;
   const sc=S.ftab;
   if(sc==='domestic'){
-    h+=`<div class="seg"><span class="${S.fdomKind==='normal'?'on':''}" onclick="S.fdomKind='normal';render()">默认规则（选快递公司）</span><span class="${S.fdomKind==='branch'?'on':''}" onclick="S.fdomKind='branch';render()">网点规则（选网点）</span></div>`;
+    h+=`<div class="seg"><span class="${S.fdomKind==='normal'?'on':''}" onclick="setRuleFilter('fdomKind','normal')">默认规则（选快递公司）</span><span class="${S.fdomKind==='branch'?'on':''}" onclick="setRuleFilter('fdomKind','branch')">网点规则（选网点）</span></div>`;
     h+=S.fdomKind==='branch'?'<div class="alert a-i">快递公司确定后可按部门、材质和型号指定网点。试算只显示预计网点，每次取号会重新匹配，补打使用原面单的网点快照。定时提前发货和推单后自动预约会跳过无明确使用权限的网点，再尝试同快递的合资格网点。<a onclick="materialBookingExample()">查看整单材质校验</a> · <a onclick="autoBranchExample()">查看网点选择示例</a> · <a onclick="queuedBookingExample()">查看移除平台后的预约结果</a></div>':'<div class="alert a-i">商家没有配置规则、或商家规则都未命中时执行。可用“客户”条件只对部分商家生效。</div>';
     if(S.fdomKind==='branch') h+=distributionBranchExample();
     h+=toolbar(sc)+rulesTable(filterRules('factory','domestic',r=>(r.kind||'normal')===S.fdomKind));
@@ -1840,18 +1948,34 @@ function toggleSt(id){
   else go();
 }
 function batchSt(v){
-  if(!S.sel.size){toast('请先勾选规则');return}
-  const skipped=[];
-  let changed=0;
-  for(const r of RULES){
-    if(!S.sel.has(r.id)||r.st===v)continue;
-    const reason=v&&(headChoiceError(r)||aeActivationIssue(r)||postalActivationError(r)||(r.sc==='tail'&&r.a.t==='opt'&&tailGroupIssue(tailNormalizedGroups(r),r.sub,r.o)));
-    if(reason){skipped.push(r.name+'：'+reason);continue}
-    r.st=v;changed++;
-    addLog(r,v?'批量启用':'批量停用','状态：'+(v?'停用 → 启用':'启用 → 停用'));
-  }
-  toast(`已${v?'启用':'停用'} ${changed} 条`+(skipped.length?'；跳过 '+skipped.join('；'):''));
-  S.sel.clear();render();
+  const preview=ruleActionScope(),rules=preview.rules;
+  if(!rules.length){toast('请先勾选本组可见的规则');return}
+  const change=()=>{
+    if(!confirmRuleScope(preview))return;
+    const skipped=[];
+    let changed=0;
+    for(const r of rules){
+      if(r.st===v)continue;
+      const reason=v&&(headChoiceError(r)||aeActivationIssue(r)||postalActivationError(r)||(r.sc==='tail'&&r.a.t==='opt'&&tailGroupIssue(tailNormalizedGroups(r),r.sub,r.o)));
+      if(reason){skipped.push(r.name+'：'+reason);continue}
+      r.st=v;changed++;
+      addLog(r,v?'批量启用':'批量停用','状态：'+(v?'停用 → 启用':'启用 → 停用'));
+    }
+    S.sel.clear();closeModal();render();
+    toast(`已${v?'启用':'停用'} ${changed} 条`+(skipped.length?'；跳过 '+skipped.join('；'):''));
+  };
+  const active=rules.filter(r=>r.st);
+  if(v||!active.some(r=>r.hit>0)){change();return}
+  openModal(`<div class="mh">确认批量停用<span class="x" onclick="closeModal()">×</span></div><div class="mb"><p>${esc(ruleScopeLabel(rules[0]))} · 勾选 ${rules.length} 条，本次将停用 ${active.length} 条。</p><table><thead><tr><th>规则名称</th><th>近 7 天命中</th><th>本次处理</th></tr></thead><tbody>${rules.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.hit} 单</td><td>${r.st?'停用':'已停用，跳过'}</td></tr>`).join('')}</tbody></table><p>后续匹配跳过已停用规则，已有订单和物流结果保留。</p><details><summary>验证提交前状态变化（示例）</summary><button class="btn s" id="batchOtherDisable">模拟另一位员工先停用首条待处理规则</button><span class="small muted" id="batchOtherResult"></span></details></div><div class="mf"><button class="btn" onclick="closeModal()">取消</button><button class="btn p" id="batchConfirm">确认停用</button></div>`);
+  $('#batchConfirm').onclick=change;
+  $('#batchOtherDisable').onclick=event=>{
+    const target=active[0];
+    if(!target.st)return;
+    target.st=0;
+    addLog(target,'停用','状态：启用 → 停用',undefined,'另一位演示员工');
+    render();
+    event.currentTarget.disabled=true;$('#batchOtherResult').textContent=' 「'+target.name+'」已由另一位员工停用。';
+  };
 }
 function copyRule(id){
   const original=RULES.find(r=>r.id===id),group=RULES.filter(r=>grpKey(r)===grpKey(original));
@@ -1868,24 +1992,85 @@ function copyRule(id){
   RULES.splice(RULES.indexOf(original)+1,0,r);
   addLog(r,'复制创建','复制自「'+original.name+'」');toast('已复制，副本默认停用');render();
 }
+function deletionSnapshot(r){
+  const group=RULES.filter(x=>grpKey(x)===grpKey(r));
+  const snapshot={id:r.id,name:r.name,group:ruleScopeLabel(r),version:'v'+ver(r),
+    priority:group.findIndex(x=>x.id===r.id)+1,enabled:!!r.st,
+    conditions:structuredClone(r.c),action:structuredClone(r.a),source:r.src||'本页创建',
+    owner:r.o,scene:r.sc,sub:r.sub||'',kind:r.kind||'normal',override:!!r.ov,created:r.created};
+  if(r.headBinding)snapshot.headBinding=r.headBinding;
+  if(r.useFactory!==undefined)snapshot.useFactory=r.useFactory;
+  if(r.legacyHeadConditions)snapshot.legacyHeadConditions=structuredClone(r.legacyHeadConditions);
+  return snapshot;
+}
 function delRule(id){
-  const ids=id?[id]:[...S.sel];if(!ids.length){toast('请先勾选规则');return}
-  const rs=RULES.filter(x=>ids.includes(x.id));const hits=rs.reduce((s,r)=>s+(r.st?r.hit:0),0);
-  openModal(`<div class="mh">删除规则<span class="x" onclick="closeModal()">×</span></div><div class="mb">确定删除${rs.length>1?' '+rs.length+' 条规则':'「'+esc(rs[0].name)+'」'}？${hits?`<div class="alert a-w mt8">近 7 天共命中 ${hits} 单，删除后这类订单将改按下一条规则或兜底顺序匹配</div>`:''}<div class="small muted mt8">已匹配的订单不受影响；删除的规则可在「操作记录」中查看当时的快照。</div></div><div class="mf"><button class="btn" onclick="closeModal()">取消</button><button class="btn p" id="delOk">删除</button></div>`);
-  $('#delOk').onclick=()=>{rs.forEach(r=>addLog(r,'删除','快照：条件 '+(Object.keys(r.c).map(condName).join('、')||'无')+'；动作 '+actText(r.a)));RULES=RULES.filter(x=>!ids.includes(x.id));ids.forEach(i=>S.sel.delete(i));closeModal();render();toast(`已删除 ${rs.length} 条`)};
+  const preview=ruleActionScope(id),rules=preview.rules;
+  if(!rules.length){toast('请先勾选本组可见的规则');return}
+  const hits=rules.reduce((sum,r)=>sum+(r.st?r.hit:0),0);
+  openModal(`<div class="mh">删除规则<span class="x" onclick="closeModal()">×</span></div><div class="mb"><p>${esc(ruleScopeLabel(rules[0]))} · 确定删除 ${rules.length} 条规则？</p><ul>${rules.map(r=>`<li>${esc(r.name)}（#${r.id}）</li>`).join('')}</ul>${hits?`<div class="alert a-w mt8">本次选中的启用规则近 7 天合计命中 ${hits} 单。删除后，后续订单按剩余配置匹配。</div>`:''}<div class="small muted mt8">已有订单保留原结果。删除后可在本组的操作记录查看原规则快照。</div></div><div class="mf"><button class="btn" onclick="closeModal()">取消</button><button class="btn p" id="delOk">删除</button></div>`);
+  $('#delOk').onclick=()=>{
+    if(!confirmRuleScope(preview,id))return;
+    const ids=new Set(rules.map(r=>r.id));
+    for(const r of rules){
+      const snapshot=deletionSnapshot(r);
+      addLog(r,'删除','删除前 '+snapshot.version+' · 优先级 '+snapshot.priority+' · '+actText(r.a),snapshot);
+    }
+    RULES=RULES.filter(r=>!ids.has(r.id));ids.forEach(i=>S.sel.delete(i));closeModal();render();toast(`已删除 ${rules.length} 条`);
+  };
+}
+function logsInView(){
+  if(S.page!=='rules'||!SCENES[curScene()])return [];
+  return LOGS.filter(l=>l.owner===S.role&&l.group===currentRuleGroup());
+}
+function snapshotConditions(conditions,kind){
+  const entries=Object.entries(conditions);
+  if(!entries.length)return '全部订单';
+  return entries.map(([field,value])=>{
+    if(!Array.isArray(value.v))return condSummary({[field]:value},[],kind);
+    const match=value.op==='nin'?'不属于':'属于';
+    const material=field==='material'&&kind!=='branch'?(value.op==='nin'?'（整单均不含）':'（任一件含有）'):'';
+    return `<div>${esc(condName(field))} · ${match} ${esc(value.v.join('、'))}${material}</div>`;
+  }).join('');
+}
+function showDeletedRule(id){
+  const entry=logsInView().find(l=>l.rid===id&&l.snapshot);
+  if(!entry){toast('当前规则组没有这条可查看的删除记录');return}
+  const s=entry.snapshot;
+  openModal(`<div class="mh">删除时的规则快照<span class="x" onclick="closeModal()">×</span></div><div class="mb">
+    <p><b>${esc(s.name)}</b> <span class="tag t-i">已删除</span></p>
+    <table><tbody><tr><th>规则 ID / 删除前版本</th><td>#${s.id} · ${esc(s.version)}</td></tr><tr><th>归属与页签</th><td>${esc(s.group)}</td></tr>
+    <tr><th>原优先级 / 状态</th><td>${s.priority} · ${s.enabled?'启用':'停用'}</td></tr>
+    <tr><th>条件（且）</th><td>${snapshotConditions(s.conditions,s.kind)}</td></tr><tr><th>动作</th><td>${actSummary(s.action)}</td></tr>
+    <tr><th>覆盖已有预选</th><td>${s.override?'允许':'关闭'}</td></tr>${s.useFactory===undefined?'':`<tr><th>头程配置来源</th><td>${s.useFactory?'引用工厂配置':'使用商家条件'}</td></tr>`}
+    ${s.legacyHeadConditions?`<tr><th>保留的历史条件</th><td>${snapshotConditions(s.legacyHeadConditions,s.kind)}</td></tr>`:''}
+    <tr><th>创建来源</th><td>${esc(s.source)}</td></tr><tr><th>删除时间 / 操作人</th><td>${esc(entry.time)} · ${esc(entry.user)}</td></tr></tbody></table>
+    <details class="mt8"><summary>查看完整条件和动作字段</summary><pre style="white-space:pre-wrap">${esc(JSON.stringify({条件:s.conditions,动作:s.action},null,2))}</pre></details></div>
+    <div class="mf"><button class="btn" onclick="ruleLog(${s.id})">该规则的日志</button><button class="btn" onclick="allLogs()">返回本组操作记录</button><button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
 }
 function ruleLog(id){
-  const r=RULES.find(x=>x.id===id);const ls=LOGS.filter(l=>l.rid===id);
-  const created = r.src ? ['系统','迁移创建',r.src+'，示例迁移批次 M-20261118-01'] : ['演示操作员','新建','按新规则创建'];
+  const ls=logsInView().filter(l=>l.rid===id);
+  const live=S.page==='rules'&&RULES.find(r=>r.id===id&&r.o===S.role&&grpKey(r)===currentRuleGroup());
+  const deleted=ls.find(l=>l.snapshot)?.snapshot;
+  if(!live&&!deleted){toast('当前规则组没有这条可查看的记录');return}
+  const name=live?live.name:deleted.name,source=live?live.src:deleted.source,createdAt=live?live.created:deleted.created;
+  const migrated=source&&source!=='本页创建';
+  const created=migrated?['系统','迁移创建',source+'，示例迁移批次 M-20261118-01']:['演示操作员','新建','按新规则创建'];
   const base=[['2026-11-20 10:02','演示操作员','调整优先级','3 → 1','v2'],['2026-11-18 09:00',...created,'v1']];
-  openModal(`<div class="mh">操作日志 · ${esc(r.name)}<span class="x" onclick="closeModal()">×</span></div><div class="mb"><table><thead><tr><th style="width:140px">时间</th><th style="width:120px">操作人</th><th style="width:90px">操作</th><th>变更内容</th><th style="width:50px">版本</th></tr></thead><tbody>
-  ${ls.map(l=>`<tr><td>${l.time}</td><td>${l.user}</td><td>${l.act}</td><td>${esc(l.detail)}</td><td>${l.ver}</td></tr>`).join('')}
-  ${r.created===TODAY?'':base.map(b=>`<tr>${b.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
-  </tbody></table></div><div class="mf"><button class="btn" onclick="closeModal()">关闭</button></div>`);
+  openModal(`<div class="mh">操作日志 · ${esc(name)} #${id}${deleted?'（已删除）':''}<span class="x" onclick="closeModal()">×</span></div><div class="mb"><table><thead><tr><th>时间</th><th>操作人</th><th>操作</th><th>变更内容</th><th>版本</th></tr></thead><tbody>
+    ${ls.map(l=>`<tr><td>${esc(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.act)}</td><td>${esc(l.detail)}${l.snapshot?` <button class="btn txt" onclick="showDeletedRule(${id})">查看删除快照</button>`:''}</td><td>${esc(l.ver)}</td></tr>`).join('')}
+    ${createdAt===TODAY?'':base.map(b=>`<tr>${b.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div><div class="mf"><button class="btn" onclick="allLogs()">查看本组操作记录</button><button class="btn" onclick="closeModal()">关闭</button></div>`);
 }
 function allLogs(){
-  const own=S.role;const ls=LOGS.filter(l=>l.owner===own);
-  openModal(`<div class="mh">操作记录（本页全部规则，含已删除）<span class="x" onclick="closeModal()">×</span></div><div class="mb">${ls.length?`<table><thead><tr><th style="width:140px">时间</th><th style="width:120px">操作人</th><th>规则</th><th style="width:90px">操作</th><th>变更内容</th></tr></thead><tbody>${ls.map(l=>`<tr><td>${l.time}</td><td>${l.user}</td><td>${esc(l.name)}${RULES.some(r=>r.id===l.rid)?'':' <span class="tag t-i">已删除</span>'}</td><td>${l.act}</td><td>${esc(l.detail)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">本次会话还没有操作。新建、编辑、启停、调整顺序、删除规则后会记在这里，删除的规则也能查到当时的快照</div>'}</div><div class="mf"><button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
+  const logs=logsInView();
+  const rows=logs.map(l=>{
+    const deleted=!RULES.some(r=>r.id===l.rid);
+    return `<tr><td>${esc(l.time)}</td><td>${esc(l.user)}</td><td><a onclick="ruleLog(${l.rid})">${esc(l.name)} #${l.rid}</a> ${deleted?'<span class="tag t-i">已删除</span>':''}</td><td>${esc(l.act)}</td><td>${esc(l.detail)}${l.snapshot?` <button class="btn txt" onclick="showDeletedRule(${l.rid})">查看删除快照</button>`:''}</td><td>${esc(l.ver)}</td></tr>`;
+  }).join('');
+  const sc=curScene();
+  if(S.page!=='rules'||!SCENES[sc])return;
+  const label=ruleScopeLabel({o:S.role,sc,kind:S.fdomKind,sub:sc==='tail'?S.tailSub:''});
+  openModal(`<div class="mh">操作记录 · ${esc(label)}<span class="x" onclick="closeModal()">×</span></div><div class="mb">${rows?`<table><thead><tr><th>时间</th><th>操作人</th><th>规则 / ID</th><th>操作</th><th>变更内容</th><th>版本</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">本组规则在本次会话中还没有操作记录。</div>'}</div><div class="mf"><button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
 }
 const tailMigrationChoice = {shop:null,factory:null};
 const tailAccounts={shop:'A',factory:'A'};
@@ -2038,17 +2223,20 @@ function previewPostalRows(rows,store,code,virtual,afterSave=false,manualWarehou
   const sampleQuotes=[
     ['store-A','W1','USPS / Ground Advantage',5],['store-A','W2','USPS / Ground Advantage',3],
     ['store-A','W2','UPS / Ground',2],['store-B','W2','USPS / Ground Advantage',1],
-    ['store-C','W1','USPS / Ground Advantage',4]
+    ['store-C','W1','USPS / Ground Advantage',4],
+    ['store-A','W1','UPS / Ground',5],['store-A','W1','UPS / Express',3],['store-A','W1','示例物流 Z / Economy',1]
   ];
   const queried=sampleQuotes.filter(([s,w])=>s===store&&(!manualWarehouse||w===manualWarehouse)&&refs.some(r=>r.warehouseId===w));
   const hasW2=queried.some(([,w])=>w==='W2');
   const incomplete=hasW2&&w2State==='timeout';
   const quotes=queried.filter(([,w])=>w!=='W2'||w2State==='priced').map(([s,w,service,cost])=>{
     const allowedStore=refs.some(r=>r.storeId===s&&r.warehouseId===w);
-    const reason=!allowedStore?'店铺与仓的组合不在本行':!row.services.includes(service)?'渠道不在本行':'可参与预选';
-    return {store:s,warehouse:w,service,cost,reason,eligible:allowedStore&&row.services.includes(service)};
+    const allowed=tailRangeMatches(row.services,service,row.otherBehavior);
+    const reason=!allowedStore?'店铺与仓的组合不在本行':!allowed?'渠道不在本行':'可参与预选';
+    return {store:s,warehouse:w,service,cost,reason,eligible:allowedStore&&allowed};
   }).sort((a,b)=>a.cost-b.cost);
-  return {index,refs,quotes,hasW2,incomplete,selected:incomplete?null:quotes.find(q=>q.eligible)||null};
+  const unknown=tailOtherPending([row]);
+  return {index,refs,quotes,hasW2,incomplete,unknown,selected:incomplete||unknown?null:quotes.find(q=>q.eligible)||null};
 }
 function tailPostalBoundary(id){
   const rule=id?RULES.find(r=>r.id===id&&r.o===S.role&&r.sub==='Temu半托'&&r.a.t==='fixed'&&r.c.zip):null;
@@ -2056,7 +2244,7 @@ function tailPostalBoundary(id){
   const choices=postalWarehouseChoices('Temu半托',S.role);
   const originalRole=S.role,originalScope=tailScopeCase[S.role];
   const name=ref=>ref.storeId+' / '+ref.warehouseId;
-  const target=p=>p.selected?p.selected.warehouse+' · '+p.selected.service+' · USD '+p.selected.cost:p.incomplete?'未预选，所需仓 W2 报价待核':'未预选';
+  const target=p=>p.unknown?'“其他”的部署行为尚待点验':p.selected?p.selected.warehouse+' · '+p.selected.service+' · USD '+p.selected.cost:p.incomplete?'未预选，所需仓 W2 报价待核':'未预选';
   let w2State='priced',retries=0;
   openModal(`<div class="mh">${rule?'指定邮编规则试算':'指定邮编 · 迁移对照'}<span class="x" onclick="closeModal()">×</span></div><div class="mb">
     <p>Temu 半托美国单 · ${rule?'仅试算当前规则「'+esc(rule.name)+'」的邮编行，假设其他条件已满足。':'以下为独立配置样本，报价均为 USD。'} 此处仅预选仓和服务。</p>
@@ -2073,7 +2261,7 @@ function tailPostalBoundary(id){
     const box=$('#zipOutcome'),example=rule?'rule':$('#zipSample').value;
     $('#zipManualResult').textContent='';
     if(!(virtual?/^\d{3}$/:/^\d{5}(?:-\d{4})?$/).test(code)){box.textContent=virtual?'请输入已由省市推得的三位邮编。':'请输入五位美国邮编或 ZIP+4，例如 02108-1234。';return}
-    const rows=rule?[{zip:tailPostal(rule.c.zip),list:postalRuleWarehouseRefs(rule),old:null,services:rule.a.postalServices||[rule.a.ch]}]:postalExampleRows(example,choices);
+    const rows=rule?[{zip:tailPostal(rule.c.zip),list:postalRuleWarehouseRefs(rule),old:null,services:rule.a.postalServices||[rule.a.ch],otherBehavior:rule.a.otherBehavior}]:postalExampleRows(example,choices);
     const current=previewPostalRows(rows,store,code,virtual,false,'',w2State);
     const saved=previewPostalRows(rows,store,code,virtual,true,'',w2State);
     const legacyRow=rows.map((row,i)=>{
@@ -2143,9 +2331,9 @@ function tailActorSelect(mode,screen){
   return `<label>示例操作账号　<select class="sel" aria-label="示例操作账号" onchange="tailAccounts[S.role]=this.value;render();${screen}('${mode}')">${['A','B','C','D'].map(k=>`<option value="${k}" ${k===tailAccounts[S.role]?'selected':''}>员工 ${k}${k==='D'?'（新增）':tailGroup(mode).accounts[k]?'':'（原未配置）'}</option>`).join('')}</select></label>`;
 }
 function tailPolicyPreview(mode){
-  const best=accountTailOffer(mode);
+  const best=accountTailOffer(mode),pending=tailOtherPending(effectiveTailGroups(mode));
   openModal(`<div class="mh">${mode} · 员工预选对照<span class="x" onclick="closeModal();render()">×</span></div><div class="mb">${tailActorSelect(mode,'tailPolicyPreview')}
-    <p>本模式甲店美东仓、同一包裹，以下两项均可用。USPS $3 / 3 天，UPS $5 / 1 天。</p><p>${esc(tailPolicySource(mode))}。按${readTailPolicy(mode)}：<b>${best?"预选 "+best.service:"本店本仓无合资格服务"}</b>。</p>
+    <p>本模式甲店美东仓、同一包裹，以下两项均可用。USPS $3 / 3 天，UPS $5 / 1 天。</p><p>${esc(tailPolicySource(mode))}。按${readTailPolicy(mode)}：<b>${pending?'“其他”尚待部署点验，请在候选组报价中核对两种行为':best?"预选 "+best.service:"本店本仓无合资格服务"}</b>。</p>
     </div><div class="mf"><button class="btn" onclick="tailGroupQuotePreview(\'${mode}\')">核对候选组报价</button>${mode==='Temu半托'?'<button class="btn" onclick="tailLog(\'b\')">查看 Y2 包裹 B 预选</button><button class="btn" onclick="lanmaTailPreview()">查看蓝马接入对照</button>':''}<button class="btn" onclick="migReport()">查看迁移报告</button><button class="btn" onclick="closeModal();render()">关闭</button></div>`);
 }
 function tailPolicyEditor(mode){
@@ -2161,7 +2349,7 @@ function tailPolicyEditor(mode){
   $('#tailSavePolicy').onclick=()=>{
     if(role!==S.role||old!==tailUsesOld(mode)||tailGroup(mode)!==group){toast('读取来源已变化，请重新打开配置');return}
     const policy=$('#tailPolicyValue').value;
-    const error=tailGroupIssue(groups,mode,role);if(policy&&error){toast(error);return}
+    const error=tailGroupIssue(groups,mode,role,!old);if(policy&&error){toast(error);return}
     if(!policy&&JSON.stringify(groups)!==JSON.stringify(unrestrictedTailGroups())){toast('保存自定义候选组前请选择优选方式；恢复内置默认时请选择全部仓和全部服务。');return}
     if(old){group.accountGroups??={};if(policy){group.accounts[actor]=policy;group.accountGroups[actor]=structuredClone(groups)}else{delete group.accounts[actor];delete group.accountGroups[actor]}}
     else {group.policy=policy;group.policyGroups=structuredClone(groups)}
@@ -2239,7 +2427,7 @@ function tailAccountExample(){
   const policy=readTailPolicy('Temu半托'),source=tailPolicySource('Temu半托');
   const best=accountTailOffer('Temu半托');
   return `<div class="bar mt12">Temu 半托 · 预选对照　${tailActorSelect('Temu半托','migReport')}</div>
-    <p>同一包裹、甲店美东仓：USPS $3 / 3 天，UPS $5 / 1 天。<b>${source}：${policy} → ${best?.service||'本店本仓无合资格服务'}</b>。</p>`;
+    <p>同一包裹、甲店美东仓：USPS $3 / 3 天，UPS $5 / 1 天。<b>${source}：${policy} → ${tailOtherPending(effectiveTailGroups('Temu半托'))?'原码“其他”待部署点验':best?.service||'本店本仓无合资格服务'}</b>。</p>`;
 }
 function tailMigrationReport(){
   const owner=S.role==='shop'?'商家':'工厂';
@@ -2482,11 +2670,98 @@ function exportMigrationReport(){
     }
   }
   const csv=lines.map(fields=>fields.map(field=>'"'+field.replace(/"/g,'""')+'"').join(',')).join('\r\n');
-  const url=URL.createObjectURL(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}));
+  downloadFile(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}),role+'-选物流迁移报告-示例.csv');
+}
+function downloadFile(blob,fileName){
+  const url=URL.createObjectURL(blob);
   const link=document.createElement('a');
-  link.href=url;link.download=role+'-选物流迁移报告-示例.csv';
+  link.href=url;link.download=fileName;
   document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+// 单文件原型离线生成 Excel。各 XML 部件以 ZIP 的存储模式写入，文本单元格不解释公式。
+function spreadsheetArchive(files){
+  const encoder=new TextEncoder(),local=[],directory=[];
+  let offset=0,directorySize=0;
+  for(const [path,xml] of Object.entries(files)){
+    const name=encoder.encode(path),data=encoder.encode(xml);
+    let crc=0xffffffff;
+    for(const byte of data){
+      crc^=byte;
+      for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    }
+    crc=(crc^0xffffffff)>>>0;
+    const header=new DataView(new ArrayBuffer(30));
+    header.setUint32(0,0x04034b50,true);
+    header.setUint16(4,20,true);
+    header.setUint16(12,33,true);
+    header.setUint32(14,crc,true);
+    header.setUint32(18,data.length,true);
+    header.setUint32(22,data.length,true);
+    header.setUint16(26,name.length,true);
+    local.push(header.buffer,name,data);
+    const entry=new DataView(new ArrayBuffer(46));
+    entry.setUint32(0,0x02014b50,true);
+    entry.setUint16(4,20,true);
+    new Uint8Array(entry.buffer,6,26).set(new Uint8Array(header.buffer,4,26));
+    entry.setUint32(42,offset,true);
+    directory.push(entry.buffer,name);
+    offset+=30+name.length+data.length;
+    directorySize+=46+name.length;
+  }
+  const end=new DataView(new ArrayBuffer(22)),count=Object.keys(files).length;
+  end.setUint32(0,0x06054b50,true);
+  end.setUint16(8,count,true);
+  end.setUint16(10,count,true);
+  end.setUint32(12,directorySize,true);
+  end.setUint32(16,offset,true);
+  return new Blob([...local,...directory,end.buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function regionWorkbook(rows){
+  const main='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const docs='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const pkg='http://schemas.openxmlformats.org/package/2006';
+  const sheetRows=rows.map((row,i)=>{
+    const cells=row.map((value,j)=>{
+      const cell=String.fromCharCode(65+j)+(i+1);
+      const valueXml=esc(String(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,''));
+      return `<c r="${cell}" t="inlineStr"><is><t xml:space="preserve">${valueXml}</t></is></c>`;
+    });
+    return `<row r="${i+1}">${cells.join('')}</row>`;
+  });
+  const cols=[24,28,12,34,32,10,25,48,12].map((width,i)=>`<col min="${i+1}" max="${i+1}" width="${width}" customWidth="1"/>`).join('');
+  return spreadsheetArchive({
+    '[Content_Types].xml':`<Types xmlns="${pkg}/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`,
+    '_rels/.rels':`<Relationships xmlns="${pkg}/relationships"><Relationship Id="rId1" Type="${docs}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml':`<workbook xmlns="${main}" xmlns:r="${docs}"><sheets><sheet name="地区规则核对" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels':`<Relationships xmlns="${pkg}/relationships"><Relationship Id="rId1" Type="${docs}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    'xl/worksheets/sheet1.xml':`<worksheet xmlns="${main}"><cols>${cols}</cols><sheetData>${sheetRows.join('')}</sheetData><autoFilter ref="A1:I${rows.length}"/></worksheet>`
+  });
+}
+function exportRegionRules(){
+  if(S.page!=='rules'||curScene()!=='domestic')return;
+  const kind=S.role==='factory'?S.fdomKind:'normal';
+  const rules=visibleRuleTargets().filter(r=>r.c.region?.v?.length);
+  if(!rules.length){toast('当前分组和筛选范围内没有可导出的地区规则');return}
+  const owner=S.role==='shop'?ME:MYFAC;
+  const group=S.role==='shop'?'商家规则':kind==='normal'?'工厂默认规则':'工厂网点规则';
+  const rows=[['配置归属','规则名称','地区关系','完整地区','目标动作','启停状态','适用工厂','其他同时满足的条件','组内优先级']];
+  function conditionValue(condition){
+    if(Array.isArray(condition.v))return (condition.op==='nin'?'不属于 ':'属于 ')+condition.v.join('、');
+    return (condition.min===''||condition.min==null?'不限':condition.min)+' 至 '+(condition.max===''||condition.max==null?'不限':condition.max);
+  }
+  for(const r of rules){
+    const region=r.c.region;
+    const factory=S.role==='factory'?MYFAC:r.c.factory?conditionValue(r.c.factory):'全部适用工厂';
+    const others=Object.entries(r.c).filter(([key])=>key!=='region'&&key!=='factory')
+      .map(([key,value])=>condName(key)+' '+conditionValue(value)).join('；');
+    const priority=RULES.filter(x=>grpKey(x)===grpKey(r)).findIndex(x=>x.id===r.id)+1;
+    for(const path of region.v){
+      rows.push([owner+' · '+group,r.name,region.op==='nin'?'不属于':'属于',path,actText(r.a),r.st?'启用':'停用',factory,others||'无',priority]);
+    }
+  }
+  downloadFile(regionWorkbook(rows),owner+'-'+group+'-地区规则核对.xlsx');
+  toast('已生成 '+rules.length+' 条地区规则的核对文件，共 '+(rows.length-1)+' 行地区');
 }
 function importRegion(){
   openModal(`<div class="mh">导入地区规则<span class="x" onclick="closeModal()">×</span></div><div class="mb">
@@ -2590,7 +2865,8 @@ function editRule(id,preset){
   drawEdit();
 }
 function availConds(){
-  return CONDS.filter(c=>!(E.sc==='tail'&&E.sub.startsWith('Shein')&&['tag','site'].includes(c.k))).filter(c=>c.sc.includes(E.sc)&&(c.o==='both'||c.o===E.o)&&(!c.onlyBranch||E.kind==='branch'));
+  const scope=headFullLegScope(E);
+  return CONDS.filter(c=>!(E.sc==='tail'&&E.sub.startsWith('Shein')&&['tag','site'].includes(c.k))).filter(c=>c.sc.includes(E.sc)&&(c.o==='both'||c.o===E.o)&&(!c.onlyBranch||E.kind==='branch')&&(!['full','mixed'].includes(scope)||fullLegFields.includes(c.k)));
 }
 function drawEdit(){
   if(E.headBinding==='temuUsStore'){drawHeadStoreEditor();return}
@@ -2605,7 +2881,10 @@ function drawEdit(){
   });
   const ks=Object.keys(E.c);
   let right=`<div class="bar" style="margin-bottom:8px"><b>已选条件</b><span class="sp"></span>${ks.length?`<span class="small muted">共 ${ks.length} 个条件</span>`:''}</div>`;
-  right+=ks.length?ks.map(condEditor).join(''):'<div class="empty">请勾选左侧条件<div class="small mt8">不选条件表示对该场景的全部订单生效</div></div>';
+  const fullScope=headFullLegScope(E);
+  if(fullScope)right+='<p class="small muted">'+(fullScope==='implicit'?'Amazon / Shopify 全程按店铺或邮编匹配。未限定平台时，含仓、尾程等条件的组合仅在支持该条件的入口匹配。':fullScope==='empty'?headConditionIssue(E):'Amazon / Shopify 全程按订单匹配店铺或邮编；工厂、客户和平台用于限定适用范围。')+(fullScope==='mixed'?' 跨平台只可使用共同条件，需要仓或尾程时请按平台拆分。':'')+'</p>';
+  if(E.legacyHeadConditions)right+='<div class="alert a-i"><div><b>原入口留存条件（只读）</b>'+condSummary(E.legacyHeadConditions)+'<span class="small">保留原值供迁移核对。全程选渠只使用下列有效条件。</span></div></div>';
+  right+=ks.length?ks.map(k=>['full','mixed'].includes(fullScope)&&!fullLegFields.includes(k)?`<div class="ccard"><div class="h">${condName(k)} · 本次范围不可用<button class="btn s" onclick="tgCond('${k}',false)">移除此条件</button></div>${condSummary({[k]:E.c[k]})}</div>`:condEditor(k)).join(''):'<div class="empty">请勾选左侧条件<div class="small mt8">不选条件表示对该场景的全部订单生效</div></div>';
   openModal(`<div class="mh">${title}<span class="x" onclick="cancelEdit()">×</span></div>
   <div class="ed"><div class="ed-l">${left}</div><div class="ed-r">${right}</div></div>
   ${actionEditor()}
@@ -2741,7 +3020,7 @@ function condEditor(k){
   let body='';
   const opSel=c.neg?`<select class="sel" style="height:24px" onchange="E.c['${k}'].op=this.value;drawEdit()"><option value="in" ${v.op==='in'?'selected':''}>属于</option><option value="nin" ${v.op==='nin'?'selected':''}>不属于</option></select>`:'';
   if(c.ed==='chips'){
-    const opts=E.sc==='tail'&&k==='tag'?['Y1','Y2']:(typeof c.opts==='function'?c.opts(E.sc):c.opts);
+    const opts=E.sc==='tail'&&k==='tag'?['Y1','Y2']:E.sc==='head'&&k==='shop'?[...SHOPS_X,'Shopify-示例美区店']:(typeof c.opts==='function'?c.opts(E.sc):c.opts);
     body=`<div class="chips">${opts.map(o=>`<span class="chip ${v.v.includes(o)?'on':''}" onclick="chip('${k}','${esc(o)}')">${esc(o)}</span>`).join('')}</div>`;
   }else if(c.ed==='region'){
     body=regionEditor(v);
@@ -2769,7 +3048,27 @@ function chip(k,o){if(k==='factory'&&headBound()){
     }
     E.c.factory.v=[o];drawEdit();return}const a=E.c[k].v;const i=a.indexOf(o);i>=0?a.splice(i,1):a.push(o);drawEdit()}
 function tailServices(){
-  return CHANNELS_X.filter(([carrier])=>TAIL_CH.includes(carrier)).map(c=>c.join(' / '));
+  return [...CHANNELS_X.filter(([carrier])=>TAIL_CH.includes(carrier)).map(c=>c.join(' / ')),'UPS / Express'];
+}
+function tailRangeOptions(saved){
+  return [...new Set([...tailServices(),...TAIL_CH,...saved])];
+}
+function tailRangeLabel(value){
+  if(value==='其他')return '其他（原渠道码）';
+  return value.includes(' / ')?value:value+'（渠道码，全系列）';
+}
+function tailRangeMatches(ranges,service,otherBehavior){
+  if(!ranges.length)return true;
+  const [carrier,product='']=service.split(' / ');
+  const code=product?carrier+'-'+product.replaceAll(' ',''):carrier;
+  return ranges.some(raw=>{
+    if(raw==='其他')return otherBehavior==='fallback'&&!TAIL_CH.some(known=>known!=='其他'&&code.startsWith(known));
+    if(raw.includes(' / '))return raw===service;
+    return code.startsWith(raw)||code.replaceAll('-','')===raw.replaceAll('-','');
+  });
+}
+function tailOtherPending(groups){
+  return groups.some(g=>g.services.includes('其他')&&!['fallback','removed'].includes(g.otherBehavior));
 }
 function postalWarehouseChoices(mode,owner){
   const leaves=[
@@ -2803,6 +3102,7 @@ function postalActivationError(rule){
   const refs=postalRuleWarehouseRefs(rule),choices=postalWarehouseChoices(rule.sub,rule.o);
   if(!refs.length||refs.some(r=>!choices.some(c=>samePostalWarehouse(c,r))))return '请核对本行店铺及有效仓后再启用。';
   if(!(rule.a.postalServices?.length||rule.a.ch))return '请为本行至少选择一个尾程渠道。';
+  if(tailOtherPending([{services:rule.a.postalServices||[rule.a.ch],otherBehavior:rule.a.otherBehavior}]))return '请先核对本行原渠道码“其他”的部署行为。';
   return postalTableError(rule);
 }
 function postalWarehousePicker(rule){
@@ -2838,9 +3138,13 @@ function unrestrictedTailGroups(){return [{all:true,warehouses:[],services:[]}]}
 function tailNormalizedGroups(rule){
   const {a}=rule,pool=tailGroupWarehousePool(rule.sub,rule.o);
   if(!a.tailGroups&&a.allAvailable)return unrestrictedTailGroups();
-  const oldGroups=a.tailGroups||((a.list||[]).map(wh=>({wh,services:[]})));
+  const oldGroups=a.tailGroups||a.warehouseChannels||((a.list||[]).map(wh=>({wh,services:[]})));
   return oldGroups.map(g=>{
     if(Array.isArray(g.warehouses))return structuredClone(g);
+    if(Array.isArray(g.warehouseList)||Array.isArray(g.channelList)){
+      const warehouses=structuredClone(g.warehouseList||[]);
+      return {all:!warehouses.length,warehouses,services:[...(g.channelList||[])]};
+    }
     const normalized={all:g.wh==='*',warehouses:[],services:[...(g.services||[])]};
     if(!g.wh||normalized.all)return normalized;
     // 这些内置样例的旧单仓来自甲店。其他没有归属的同名仓需由人员核对。
@@ -2856,7 +3160,7 @@ function effectiveTailGroups(mode){
   return (tailUsesOld(mode)?group.accountGroups?.[tailAccounts[S.role]]:group.policyGroups)||unrestrictedTailGroups();
 }
 function tailEligible(groups,leaf,service){
-  return groups.some(g=>(g.all||g.warehouses.some(ref=>samePostalWarehouse(ref,leaf)))&&(!g.services.length||g.services.includes(service)));
+  return groups.some(g=>(g.all||g.warehouses.some(ref=>samePostalWarehouse(ref,leaf)))&&tailRangeMatches(g.services,service,g.otherBehavior));
 }
 function tailGroupQuotePreview(mode,id){
   const rule=id?RULES.find(r=>r.id===id&&r.o===S.role&&r.sc==='tail'&&r.sub===mode):null;
@@ -2865,11 +3169,14 @@ function tailGroupQuotePreview(mode,id){
   const byTime=(rule?MNAME[rule.a.m]:readTailPolicy(mode))==='时效最快';
   const catalog=tailGroupWarehousePool(mode,S.role), stores=[...new Map(catalog.map(w=>[w.storeId,w.shop])).entries()];
   const temu=mode==='Temu半托';
+  const includesOther=groups.some(g=>g.services.includes('其他'));
   openModal(`<div class="mh">${esc(mode)} · 成本与时效选仓示例<span class="x" onclick="closeModal()">×</span></div><div class="mb">
     <p>${rule?'规则「'+esc(rule.name)+'」 · 假设本单满足该规则的其他条件。':esc(tailPolicySource(mode))} 按${byTime?'时效最快':'成本最低'}预选。报价样本使用美元。</p>
     <ol>${groups.map(g=>`<li>${esc(tailGroupLabel(g))}</li>`).join('')}</ol>
     <div class="bar"><label>订单店铺 <select id="groupQuoteStore" class="sel">${stores.map(([k,name])=>`<option value="${k}">${esc(name)}</option>`).join('')}</select></label>
     ${temu?'<label>W2 的首次询价结果 <select id="groupQuoteInitial" class="sel"><option value="priced">返回有效报价</option><option value="timeout">询价超时</option><option value="empty">明确无可用服务</option></select></label>':''}</div>
+    <div class="bar"><label>报价样本 <select class="sel" id="groupRangeCase"><option value="warehouse">多仓报价</option><option value="range">UPS 两项服务及未列名服务</option></select></label>
+    ${includesOther?'<label>对照部署行为 <select class="sel" id="groupOtherCase"><option value="">按本组点验记录</option><option value="fallback">假设保留“其他”兜底</option><option value="removed">假设已移除“其他”兜底</option></select></label>':''}</div>
     <div id="groupQuoteResult" aria-live="polite"></div>
     <section id="groupRetryTools" hidden><label>W2 重查回执 <select class="sel" id="groupRetryReply"><option value="priced">返回有效报价</option><option value="empty">明确无可用服务</option><option value="timeout">仍然超时</option></select></label> <button type="button" class="btn" id="groupRetry">仅重查 W2 报价</button></section>
     <p id="groupQuoteCounts" class="small"></p></div><div class="mf"><button class="btn" onclick="closeModal()">关闭</button></div>`,'xl');
@@ -2880,6 +3187,9 @@ function tailGroupQuotePreview(mode,id){
   function renderResult(){
     const store=$('#groupQuoteStore').value;
     const eligible=catalog.filter(w=>w.storeId===store&&groups.some(g=>g.all||g.warehouses.some(ref=>samePostalWarehouse(ref,w))));
+    const other=$('#groupOtherCase')?.value,sameWarehouse=$('#groupRangeCase').value==='range';
+    const testedGroups=other?groups.map(g=>({...g,otherBehavior:other})):groups;
+    const pendingOther=tailOtherPending(testedGroups.filter(g=>eligible.some(w=>g.all||g.warehouses.some(ref=>samePostalWarehouse(ref,w)))));
     let waiting=false;
     const candidates=[];
     const rows=eligible.map(w=>{
@@ -2888,23 +3198,25 @@ function tailGroupQuotePreview(mode,id){
       waiting ||= pending;
       const items=[];
       if(!pending&&rate&&!(temu&&w.warehouseId==='W2'&&outcome==='empty')){
-        for(const [name,add] of [['UPS / Ground',0],['USPS / Ground Advantage',1]]){
-          const price=rate[1]+add,days=rate[2]+add,allowed=tailEligible(groups,w,name);
+        const offers=sameWarehouse?[['UPS / Ground',5,2],['UPS / Express',3,1],['示例物流 Z / Economy',1,4]]:[['UPS / Ground',rate[1],rate[2]],['USPS / Ground Advantage',rate[1]+1,rate[2]+1]];
+        for(const [name,price,days] of offers){
+          const allowed=tailEligible(testedGroups,w,name);
           if(allowed)candidates.push({w,name,price,days});
-          items.push(`${name} · USD ${price} / ${days} 天${allowed?'':'（不在本组渠道）'}`);
+          items.push(`${name} · USD ${price} / ${days} 天${allowed?'':pendingOther&&name==='示例物流 Z / Economy'?'（“其他”待核）':'（不在本组渠道）'}`);
         }
       }
       return `<tr><td>${esc(w.shop+' / '+w.warehouseId)}</td><td>${pending?'询价超时，结果待查':items.join('<br>')||'明确无可用服务'}</td></tr>`;
     });
     candidates.sort((a,b)=>(byTime?a.days-b.days:0)||a.price-b.price);
     const best=candidates[0];
-    const verdict=waiting?'未预选；所需仓的报价尚未齐全。':best?`预选 ${best.w.shop} / ${best.w.warehouseId} · ${best.name} · USD ${best.price} / ${best.days} 天`:'未预选；本店没有符合该组仓和渠道条件的可用服务。';
+    const verdict=pendingOther?'原码“其他”的部署行为待核。保留旧路径，切换结论待确认。':waiting?'未预选；所需仓的报价尚未齐全。':best?`预选 ${best.w.shop} / ${best.w.warehouseId} · ${best.name} · USD ${best.price} / ${best.days} 天`:'未预选；本店没有符合该组仓和渠道条件的可用服务。';
     $('#groupQuoteResult').innerHTML=`<table><thead><tr><th>本店本次询价仓</th><th>当前回执</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="2">本店没有配置的候选仓</td></tr>'}</tbody></table><p><b id="groupQuoteRecommendation">${esc(verdict)}</b></p>`;
     $('#groupRetryTools').hidden=!waiting;
-    $('#groupQuoteCounts').textContent=`本次补查报价 ${retries} 次。新增预约、购标、标发各 0 次。`;
+    $('#groupQuoteCounts').textContent=(other?'当前仅按假设部署对照，原码和点验记录保持原值。':'')+`本次补查报价 ${retries} 次。新增预约、购标、标发各 0 次。`;
   }
   function reset(){outcome=$('#groupQuoteInitial')?.value||'priced';retries=0;renderResult();}
   $('#groupQuoteStore').onchange=reset;if(temu)$('#groupQuoteInitial').onchange=reset;
+  $('#groupRangeCase').onchange=reset;if(includesOther)$('#groupOtherCase').onchange=reset;
   $('#groupRetry').onclick=()=>{if(outcome!=='timeout'||!temu)return;outcome=$('#groupRetryReply').value;retries++;renderResult();};
   renderResult();
 }
@@ -2920,15 +3232,17 @@ function tailGroupLabel(g){
     return leaf?`${leaf.customer} / ${leaf.shop} / ${leaf.wh}（${leaf.warehouseId}）`:[ref.shopId,ref.storeId,ref.warehouseId].join(' / ');
   });
   const where=g.all||g.wh==='*'?'全部可用仓':names.join('、')||g.legacyWh||g.wh||'待选仓';
-  return where+' · '+(g.services?.length?g.services.join('、'):'全部可用服务');
+  const behavior=g.services?.includes('其他')?' · '+({fallback:'目标部署保留“其他”匹配',removed:'目标部署已移除“其他”兜底'}[g.otherBehavior]||'“其他”待部署点验'):'';
+  return where+' · '+(g.services?.length?g.services.map(tailRangeLabel).join('、'):'全部可用服务')+behavior;
 }
-function tailGroupIssue(groups,mode,owner){
+function tailGroupIssue(groups,mode,owner,requireVerifiedOther=true){
   if(!groups.length)return '请添加候选组并选择仓或全部可用仓';
   const pool=tailGroupWarehousePool(mode,owner);
   for(const [i,g] of groups.entries()){
     if(g.legacyWh)return `组 ${i+1} 的原仓「${g.legacyWh}」归属待核，请核对后选择。`;
     if(!g.all&&!g.warehouses.length)return `请为组 ${i+1} 勾选具体店铺仓或选择全部可用仓。`;
     if(g.warehouses.some(ref=>!pool.some(w=>samePostalWarehouse(w,ref))))return `组 ${i+1} 含失效仓，请核对其归属。`;
+    if(requireVerifiedOther&&tailOtherPending([g]))return `组 ${i+1} 保留渠道码“其他”。请先核对目标部署是否沿用原兜底。核对前保留旧路径。`;
   }
   return '';
 }
@@ -2936,14 +3250,15 @@ function bindTailGroupEditor(host,groups,mode,owner){
   const pool=tailGroupWarehousePool(mode,owner);
   function draw(){
     const cards=groups.map((g,i)=>{
-      const services=[...new Set([...tailServices(),...g.services])];
+      const services=tailRangeOptions(g.services);
       const unresolved=(g.warehouses||[]).filter(ref=>!pool.some(w=>samePostalWarehouse(w,ref)));
       return `<div class="ccard" data-group-index="${i}"><div class="bar"><b>组 ${i+1}</b>
         <button type="button" class="btn s" data-command="up" ${!i?'disabled':''}>上移</button><button type="button" class="btn s" data-command="down" ${i===groups.length-1?'disabled':''}>下移</button><button type="button" class="btn s" data-command="remove">移除</button></div>
         ${g.legacyWh||unresolved.length?`<p>原仓待核：${esc(g.legacyWh||unresolved.map(w=>w.storeId+' / '+w.warehouseId).join('、'))}。<button type="button" class="btn s" data-command="reselect">已核对，重新选择</button></p>`:''}
         <label class="ck"><input type="checkbox" data-select-all ${g.all?'checked':''}>全部可用仓（本单所属店铺）</label>
         <div class="cks">${pool.map(w=>`<label class="ck"><input type="checkbox" data-leaf="${w.id}" ${g.all?'disabled':''} ${g.warehouses.some(x=>samePostalWarehouse(x,w))?'checked':''}>${esc(w.customer+' › '+w.shop+' › '+w.wh+'（'+w.warehouseId+'）')}</label>`).join('')}</div>
-        <div class="small mt8">本组渠道（未勾选表示全部可用服务）</div><div class="cks">${services.map((s,j)=>`<label class="ck"><input type="checkbox" data-service="${j}" ${g.services.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div></div>`;
+        <div class="small mt8">本组渠道（未勾选表示全部可用服务）</div><div class="cks">${services.map((s,j)=>`<label class="ck"><input type="checkbox" data-service="${j}" ${g.services.includes(s)?'checked':''}>${esc(tailRangeLabel(s))}</label>`).join('')}</div>
+        ${g.services.includes('其他')?`<label>“其他”原码的部署点验 <select class="sel" data-other-behavior><option value="">尚未核实，保留旧入口</option><option value="fallback" ${g.otherBehavior==='fallback'?'selected':''}>样例部署保留未列名服务兜底</option><option value="removed" ${g.otherBehavior==='removed'?'selected':''}>样例部署已移除未列名服务兜底</option></select></label>`:''}</div>`;
     });
     host.innerHTML=cards.join('')+'<button type="button" class="btn s" data-command="add">添加候选组</button>';
   }
@@ -2967,9 +3282,12 @@ function bindTailGroupEditor(host,groups,mode,owner){
       const w=pool.find(item=>item.id===input.dataset.leaf);
       g.warehouses=g.warehouses.filter(x=>!samePostalWarehouse(x,w));
       if(input.checked)g.warehouses.push(postalWarehouseRef(w));
+    }else if(input.hasAttribute('data-other-behavior')){
+      g.otherBehavior=input.value;
     }else if(input.hasAttribute('data-service')){
-      const s=[...new Set([...tailServices(),...g.services])][Number(input.dataset.service)];
+      const s=tailRangeOptions(g.services)[Number(input.dataset.service)];
       g.services=g.services.filter(item=>item!==s);if(input.checked)g.services.push(s);
+      if(s==='其他'&&!input.checked)delete g.otherBehavior;
     }
     draw();
   };
@@ -2994,14 +3312,16 @@ function chooseTailAction(type){
   drawEdit();
 }
 function tailServiceOptions(items){
-  const opts=[...new Set([...tailServices(),...items])];
-  return opts.map((c,i)=>`<label class="ck"><input type="checkbox" ${items.includes(c)?'checked':''} onchange="changeTailService(${i},this.checked)">${esc(c)}</label>`).join(' ');
+  const opts=E.c.zip?tailRangeOptions(items):[...new Set([...tailServices(),...items])];
+  const behavior=items.includes('其他')&&E.c.zip?`<p><label>“其他”原码的部署点验 <select class="sel" onchange="E.a.otherBehavior=this.value"><option value="">尚未核实，保留旧入口</option><option value="fallback" ${E.a.otherBehavior==='fallback'?'selected':''}>样例部署保留未列名服务兜底</option><option value="removed" ${E.a.otherBehavior==='removed'?'selected':''}>样例部署已移除未列名服务兜底</option></select></label></p>`:'';
+  return opts.map((c,i)=>`<label class="ck"><input type="checkbox" ${items.includes(c)?'checked':''} onchange="changeTailService(${i},this.checked)">${esc(tailRangeLabel(c))}</label>`).join(' ')+behavior;
 }
 function changeTailService(i,on){
   const items=E.a.postalServices;
-  const name=[...new Set([...tailServices(),...items])][i];
+  const name=(E.c.zip?tailRangeOptions(items):[...new Set([...tailServices(),...items])])[i];
   if(on&&!items.includes(name))items.push(name);
   if(!on&&items.includes(name))items.splice(items.indexOf(name),1);
+  if(!on&&name==='其他')delete E.a.otherBehavior;
   drawEdit();
 }
 function tailActionEditor(){
@@ -3080,15 +3400,16 @@ function saveRule(){
     if(v.min!==undefined){if(v.min===''&&v.max===''){toast(`条件「${n}」至少填写最小值或最大值`);return}if(v.min!==''&&v.max!==''&&+v.min>=+v.max){toast(`条件「${n}」的最小值需小于最大值`);return}}
   }
   if(E.sc==='tail'){
-    if(E.a.t==='opt'){const error=tailGroupIssue(E.a.tailGroups||[],E.sub,E.o);if(error){toast(error);return}}
+    if(E.a.t==='opt'){const error=tailGroupIssue(E.a.tailGroups||[],E.sub,E.o,!!E.st);if(error){toast(error);return}}
     if(E.a.t==='fixed'&&!E.c.zip&&!E.a.wh){toast('请选择发货仓');return}
     if(E.a.t==='fixed'&&E.sub.startsWith('Shein')&&!E.c.zip){toast('请为邮编指定仓及渠道设置邮编条件');return}
-    if(E.a.t==='fixed'&&!E.c.zip&&E.a.postalServices?.length!==1){toast('固定仓及渠道需选中一个服务');return}
+    if(E.a.t==='fixed'&&!E.c.zip&&(E.a.postalServices?.length!==1||!E.a.postalServices[0].includes(' / '))){toast('固定仓及渠道需选中一个具体服务');return}
     if(E.a.t==='fixed'&&E.c.zip){
       const leaves=E.a.postalWarehouses||[],choices=postalWarehouseChoices(E.sub,E.o);
       if(!leaves.length){toast('请为本行选择至少一个可核对店铺归属的仓');return}
       if(leaves.some(w=>!choices.some(c=>samePostalWarehouse(w,c)))){toast('原仓已不可选，请核对后移除失效仓并选择有效店铺仓');return}
       if(!E.a.postalServices?.length){toast('请为本行至少选择一个尾程渠道');return}
+      if(E.st&&tailOtherPending([{services:E.a.postalServices,otherBehavior:E.a.otherBehavior}])){toast('请先核对本行原渠道码“其他”的部署行为。');return}
       const error=postalTableError(E);
       if(error){toast(error);return}
       delete E.a.wh;delete E.a.legacyPostalWarehouse;
@@ -3103,6 +3424,7 @@ function saveRule(){
   const validateHead=()=>{
     const error=headChoiceError(E);
     if(!error)return true;
+    if(!E.st&&error===headConditionIssue(E))return true;
     const original=RULES.find(r=>r.id===E.id);
     if(!E.st&&original&&unavailableHead(E).length&&JSON.stringify(original.a)===JSON.stringify(E.a)&&JSON.stringify(original.c.factory)===JSON.stringify(E.c.factory))return true;
     toast(error);return false;
@@ -3143,7 +3465,7 @@ function saveRule(){
         if(!reason&&!next.incomplete&&!sameSelection(next,p.res))reason='预计结果已变化，请重新预览';
         if(reason)return {no:p.no,before,after:before,status:'跳过',reason};
         applyEngine(o,{why:'规则「'+r.name+'」变更后追溯'});
-        return {no:p.no,before,after:o.cp,status:o.matchPending?'资料待核':o.cp?'已处理':'仍未匹配',reason:o.matchPending||o.rule||o.reason};
+        return {no:p.no,before,after:o.cp,status:o.matchPending?'资料待核':o.cp?'已处理':'仍未匹配',reason:o.matchPending||o.reason||o.rule};
       });
       for(const p of pending)rows.push({no:p.no,before:p.cp,after:p.cp,status:'资料待核',reason:p.res.reason+'；本次预览已保留原物流，请补齐后重新预览'});
       render();orderOutcome('规则追溯',rows,'确认的追溯范围');
@@ -3648,7 +3970,7 @@ function detail(no){
     <table id="firstFactoryLines"><thead><tr><th>单据</th><th>工厂</th><th>普通快递</th><th>运单号</th></tr></thead><tbody>${[o,...o.lines].map((l,i)=>`<tr><td>${i?'子单 '+i:'主单'} · ${esc(l.no)}</td><td>${esc(l.fac||'未设置')}</td><td>${esc(l.cp||'空')}</td><td>${esc(l.waybill||'无')}</td></tr>`).join('')}</tbody></table><p class="small muted">本次同步与首次设置工厂均不预约面单，不向平台标发。</p>`:''}
   ${o.matchPending?`<div class="alert a-w">最近一次匹配资料待核 · ${esc(o.matchPending)}。保留${esc(o.cp||'未匹配')}；补齐资料后可重新匹配。</div>`:''}
   <h4 class="mb8">物流日志</h4><table class="mb8"><tbody>${(o.events||[]).slice().reverse().map(e=>`<tr><td style="width:130px" class="small muted">${e.t}</td><td class="small">${esc(e.txt)}</td></tr>`).join('')||'<tr><td class="muted small">暂无</td></tr>'}</tbody></table>
-  ${o.ruleHits?.length?`<h4 class="mb8">规则命中记录</h4><table class="mb8"><thead><tr><th>时间</th><th>命中时的名称</th><th>命中版本</th></tr></thead><tbody>${o.ruleHits.slice().reverse().map(h=>`<tr><td>${esc(h.at)}</td><td>${esc(h.name)}</td><td>${esc(h.version)}</td></tr>`).join('')}</tbody></table>`:''}
+  ${o.ruleHits?.length?`<h4 class="mb8">规则命中记录</h4><table class="mb8"><thead><tr><th>时间</th><th>命中时的名称</th><th>命中版本</th><th>执行结果</th></tr></thead><tbody>${o.ruleHits.slice().reverse().map(h=>`<tr><td>${esc(h.at)}</td><td>${esc(h.name)}<div class="small muted">ID ${esc(h.id)}</div></td><td>${esc(h.version)}</td><td>${esc(h.outcome||'已匹配')}</td></tr>`).join('')}</tbody></table>`:''}
   ${o.addressNotice?`<div class="alert a-w"><div><b>普通面单 · 平台改址核对示例</b><br>旧流程会直接申请新号，旧运单可能仍有效。请先核对旧号的作废凭据和新申请的受理结果。当前号为空时仍需核对两笔记录。<br>待核期间暂停重办及使用旧址面单发货。晚到回执按原请求登记，新号须核对地址和归属，平台标发结果另查平台回执。</div></div>`:''}
   ${o.quotaReview?`<div class="alert a-w"><div><b>共享圆通 · 原申请待核</b><br>这笔历史任务只留下“共享余额不足”。旧流程中，承运方返号后扣额失败也会出现这句提示。该分支已用额度没有增加，运单号仅留在技术日志中，员工无法从任务、订单或面单列表找回号码和文件。<br>请由有权限的经办人凭订单号、快递和申请时间协同运维核对原请求，必要时向共享服务商核实。记录依据和经办人；仅找回号码时继续核对原件，平台标发另看回执。核清前暂停再次预约、改选后重办或批量重办。</div></div>`:''}
   <h4 class="mb8">选物流过程 <span class="small muted" style="font-weight:400">${o.traceAt?'匹配时间 '+o.traceAt+'，记录的是当时的规则':'当前状态'}</span></h4>${stale?`<div class="alert a-w">规则已有变化：按当前规则会选 ${nowRes.cp||'未匹配'}${nowRes.rule?'（'+esc(nowRes.rule)+'）':''}，订单不会自动改，可点「重新匹配」</div>`:''}${traceHtml(steps)}
@@ -3714,7 +4036,13 @@ function changeOrderFactory(o,factory){
   if(protectedResult){const msg=protectedResult+'，保留原结果与请求关联';addEvt(o,msg);return msg}
   if(o.lock){
     const failure=avail(o.cp,o);
-    if(!failure){const msg=o.cp+' 在新工厂可用，保持不变';addEvt(o,msg);return msg}
+    if(!failure){
+      const estimate=estimateBranch(o,o.cp);
+      o.branch=estimate.branch;
+      o.branchPending=estimate.branch?'':[estimate.pending,'取号时确定'].filter(Boolean).join('，');
+      const msg=o.cp+' 在新工厂可用，保持不变；'+(o.branch?'新厂预计网点：'+o.branch:'新厂预计网点待核：'+o.branchPending);
+      addEvt(o,msg);return msg;
+    }
     applyEngine(o,{unlock:1,why:'原快递在新工厂不可用（'+failure+'），已解除锁定并重新匹配'});
   }else applyEngine(o,{why:'更换工厂后自动重新匹配'});
   if(o.matchPending)return '工厂已更换，物流资料待核：'+o.matchPending+'；保留'+(o.cp||'未匹配');
@@ -3815,7 +4143,7 @@ function sortView(){return [S.role,S.page,S.role==='shop'?S.tab:S.ftab,S.fdomKin
 function showUndo(txt,fn){UNDO=fn;undoView=sortView();$('#undoTxt').textContent=txt;$('#undo').classList.add('show');clearTimeout(showUndo._t);showUndo._t=setTimeout(()=>{$('#undo').classList.remove('show');UNDO=null},8000)}
 function doUndo(){if(UNDO){const notice=UNDO();UNDO=null;render();toast(notice||'已撤销')}$('#undo').classList.remove('show')}
 /* ============ 原型说明 ============ */
-const NOTES=`<h4>原型说明 · v2.13</h4><p>右下方切换商家和工厂视角。示例只在本页运行，刷新后可重新演示。</p>
+const NOTES=`<h4>原型说明 · v2.14</h4><p>右下方切换商家和工厂视角。示例只在本页运行，刷新后可重新演示。</p>
   <h4>迁移和订单验收入口</h4><ul>
   <li>商家端「我的订单」可以分别查看待推送、工厂待审和生产中订单的换厂资格。规则改名后，点命中数可找到原订单，在详情查看命中时的名称和版本。</li>
   <li>商家端打开「查看迁移报告」，在「快递管理 · 分配顺序」一行核对正常订单和历史异常组各自会选哪家快递。</li>
